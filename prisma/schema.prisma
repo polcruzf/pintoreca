@@ -1,0 +1,730 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+USER
+PROFESSIONAL
+ADMIN
+}
+
+enum UserStatus {
+PENDING_VERIFICATION
+ACTIVE
+SUSPENDED
+ANONYMIZED
+}
+
+enum ProfessionalStatus {
+ACTIVE
+PENDING_VERIFICATION
+REJECTED
+SUSPENDED
+}
+
+enum ListingStatus {
+DRAFT
+PENDING_PLAN_SELECTION
+PUBLISHED
+HIDDEN
+REJECTED
+SUSPENDED
+PENDING_REVIEW
+INACTIVE_DUE_TO_PLAN_LIMIT
+}
+
+enum BudgetType {
+FREE
+PAID
+}
+
+enum AvailabilityOption {
+MONDAY_TO_FRIDAY
+MONDAY_TO_SATURDAY
+MONDAY_TO_SUNDAY
+}
+
+enum ExperienceRange {
+EXPERIENCE_0_3
+EXPERIENCE_3_5
+EXPERIENCE_5_10
+EXPERIENCE_10_20
+EXPERIENCE_20_PLUS
+}
+
+enum BillingInterval {
+MONTHLY
+}
+
+enum SubscriptionStatus {
+ACTIVE
+EXPIRED
+CANCELLED
+PAST_DUE
+}
+
+enum PackagePurchaseStatus {
+ACTIVE
+FULLY_CONSUMED
+CANCELLED
+REFUNDED
+}
+
+enum PaymentType {
+SUBSCRIPTION
+PACKAGE
+}
+
+enum PaymentProvider {
+STRIPE
+PAYPAL
+}
+
+enum PaymentStatus {
+PENDING
+SUCCEEDED
+FAILED
+CANCELLED
+}
+
+enum PaymentMethodType {
+CARD
+PAYPAL
+OTHER
+}
+
+enum FeaturedEventStatus {
+ACTIVE
+EXPIRED
+CANCELLED
+}
+
+enum ConversationStatus {
+ACTIVE
+CLOSED
+BLOCKED
+REPORTED
+}
+
+enum ReviewStatus {
+PUBLISHED
+REPORTED
+HIDDEN
+REJECTED
+}
+
+enum ReviewClaimStatus {
+PENDING
+RESOLVED_KEEP
+RESOLVED_HIDE
+RESOLVED_REJECT
+}
+
+enum NotificationType {
+NEW_MESSAGE
+NEW_REVIEW
+REVIEW_REPORTED
+SUBSCRIPTION_ACTIVATED
+SUBSCRIPTION_EXPIRED
+PAYMENT_FAILED
+LISTING_PUBLISHED
+LISTING_REJECTED
+FEATURED_ACTIVATED
+PLAN_LIMIT_REACHED
+}
+
+enum RelaxRequestStatus {
+NEW
+IN_PROGRESS
+ASSIGNED
+CLOSED
+CANCELLED
+}
+
+model User {
+id String @id @default(uuid()) @db.Uuid
+name String
+email String @unique
+emailVerified Boolean @default(false)
+role UserRole
+status UserStatus @default(PENDING_VERIFICATION)
+suspensionReason String?
+lastLoginAt DateTime?
+signupIp String?
+signupUserAgent String?
+signupSource String?
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+anonymizedAt DateTime?
+
+professionalProfile ProfessionalProfile?
+notificationPreferences UserNotificationPreferences?
+reviews Review[]
+favorites Favorite[]
+conversationsAsCustomer Conversation[]
+messages Message[]
+notifications Notification[]
+conversationBlocks ConversationBlock[]
+resolvedReviewClaims ReviewClaim[] @relation("ReviewClaimResolvedByAdmin")
+
+@@index([role])
+@@index([status])
+}
+
+model UserNotificationPreferences {
+id String @id @default(uuid()) @db.Uuid
+userId String @unique @db.Uuid
+emailEnabled Boolean @default(true)
+pushEnabled Boolean @default(true)
+marketingEmailsEnabled Boolean @default(false)
+updatedAt DateTime @updatedAt
+
+user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProfessionalProfile {
+id String @id @default(uuid()) @db.Uuid
+userId String @unique @db.Uuid
+phone String? @unique
+phoneVerified Boolean @default(false)
+professionalStatus ProfessionalStatus @default(ACTIVE)
+isVerified Boolean @default(false)
+verificationRequestedAt DateTime?
+verificationCompletedAt DateTime?
+verificationDeadlineAt DateTime?
+verificationNotes String?
+adminNotes String?
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+billingInfo BillingInfo?
+listings Listing[]
+subscriptions Subscription[]
+packagePurchases PackagePurchase[]
+payments Payment[]
+conversations Conversation[]
+reviewClaims ReviewClaim[]
+
+@@index([professionalStatus])
+@@index([isVerified])
+}
+
+model BillingInfo {
+id String @id @default(uuid()) @db.Uuid
+professionalProfileId String @unique @db.Uuid
+legalName String
+taxId String
+addressLine1 String
+addressLine2 String?
+postalCode String
+city String
+province String
+country String @default("España")
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+professionalProfile ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+
+@@index([taxId])
+}
+
+model Listing {
+id String @id @default(uuid()) @db.Uuid
+professionalProfileId String @db.Uuid
+slug String @unique
+citySlug String
+provinceSlug String
+displayName String
+description String
+yearsExperience ExperienceRange
+availability AvailabilityOption
+budgetType BudgetType
+status ListingStatus @default(DRAFT)
+hasPendingReview Boolean @default(false)
+
+postalCode String
+city String
+province String
+latitude Decimal @db.Decimal(10, 7)
+longitude Decimal @db.Decimal(10, 7)
+serviceRadiusKm Int
+
+viewsCount Int @default(0)
+favoritesCount Int @default(0)
+averageRating Decimal @default(0) @db.Decimal(3, 2)
+reviewsCount Int @default(0)
+
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+publishedAt DateTime?
+hiddenAt DateTime?
+rejectedAt DateTime?
+suspendedAt DateTime?
+
+professionalProfile ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+
+specialties ListingSpecialty[]
+priceHistory ListingPriceHistory[]
+dailyStats ListingDailyStats[]
+reviews Review[]
+favorites Favorite[]
+conversations Conversation[]
+featuredEvents ListingFeaturedEvent[]
+boostEvents ListingBoostEvent[]
+images ListingImage[]
+
+@@index([professionalProfileId])
+@@index([status])
+@@index([city])
+@@index([citySlug])
+@@index([province])
+@@index([provinceSlug])
+@@index([postalCode])
+@@index([publishedAt])
+}
+
+model ListingImage {
+id String @id @default(uuid()) @db.Uuid
+listingId String @db.Uuid
+fileUrl String
+filePath String?
+sortOrder Int
+isPrimary Boolean @default(false)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+@@index([listingId])
+@@index([sortOrder])
+}
+
+model Specialty {
+id String @id @default(uuid()) @db.Uuid
+name String @unique
+slug String @unique
+seoTitle String?
+seoDescription String?
+content String?
+icon String?
+displayOrder Int @default(0)
+isActive Boolean @default(true)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+listings ListingSpecialty[]
+relaxRequests RelaxRequest[]
+
+@@index([isActive])
+@@index([displayOrder])
+}
+
+model ListingSpecialty {
+id String @id @default(uuid()) @db.Uuid
+listingId String @db.Uuid
+specialtyId String @db.Uuid
+pricePerM2 Decimal @db.Decimal(10, 2)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+specialty Specialty @relation(fields: [specialtyId], references: [id], onDelete: Restrict)
+priceHistory ListingPriceHistory[]
+
+@@unique([listingId, specialtyId])
+@@index([specialtyId])
+}
+
+model ListingPriceHistory {
+id String @id @default(uuid()) @db.Uuid
+listingId String @db.Uuid
+listingSpecialtyId String @db.Uuid
+oldPricePerM2 Decimal? @db.Decimal(10, 2)
+newPricePerM2 Decimal @db.Decimal(10, 2)
+changedAt DateTime @default(now())
+
+listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+listingSpecialty ListingSpecialty @relation(fields: [listingSpecialtyId], references: [id], onDelete: Cascade)
+
+@@index([listingId])
+@@index([listingSpecialtyId])
+@@index([changedAt])
+}
+
+model ListingDailyStats {
+id String @id @default(uuid()) @db.Uuid
+listingId String @db.Uuid
+date DateTime
+viewsCount Int @default(0)
+favoritesCount Int @default(0)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+@@unique([listingId, date])
+@@index([date])
+}
+
+model SubscriptionPlan {
+id String @id @default(uuid()) @db.Uuid
+name String
+slug String @unique
+description String?
+highlightLabel String?
+price Decimal @db.Decimal(10, 2)
+currency String @default("EUR")
+billingInterval BillingInterval @default(MONTHLY)
+isActive Boolean @default(true)
+displayOrder Int @default(0)
+
+maxListings Int
+maxSpecialtiesPerListing Int
+maxFeaturedActivationsPerCycle Int @default(0)
+allowMultipleFeaturedSimultaneous Boolean @default(false)
+requiresVerification Boolean @default(false)
+includesVerifiedBadge Boolean @default(false)
+
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+subscriptions Subscription[]
+
+@@index([isActive])
+@@index([displayOrder])
+}
+
+model Subscription {
+id String @id @default(uuid()) @db.Uuid
+professionalProfileId String @db.Uuid
+subscriptionPlanId String @db.Uuid
+status SubscriptionStatus @default(ACTIVE)
+startedAt DateTime
+expiresAt DateTime?
+autoRenew Boolean @default(true)
+paymentProvider PaymentProvider?
+externalSubscriptionId String?
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+professionalProfile ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+subscriptionPlan SubscriptionPlan @relation(fields: [subscriptionPlanId], references: [id], onDelete: Restrict)
+
+payments Payment[]
+featuredEvents ListingFeaturedEvent[]
+
+@@index([professionalProfileId])
+@@index([subscriptionPlanId])
+@@index([status])
+@@index([startedAt])
+@@index([expiresAt])
+}
+
+model PackageType {
+id String @id @default(uuid()) @db.Uuid
+name String
+slug String @unique
+description String?
+price Decimal @db.Decimal(10, 2)
+currency String @default("EUR")
+featuredCredits Int @default(0)
+boostCredits Int @default(0)
+isActive Boolean @default(true)
+isVisible Boolean @default(true)
+displayOrder Int @default(0)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+purchases PackagePurchase[]
+
+@@index([isActive])
+@@index([isVisible])
+@@index([displayOrder])
+}
+
+model PackagePurchase {
+id String @id @default(uuid()) @db.Uuid
+professionalProfileId String @db.Uuid
+packageTypeId String @db.Uuid
+featuredCreditsTotal Int @default(0)
+featuredCreditsRemaining Int @default(0)
+boostCreditsTotal Int @default(0)
+boostCreditsRemaining Int @default(0)
+status PackagePurchaseStatus @default(ACTIVE)
+purchasedAt DateTime
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+professionalProfile ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+packageType PackageType @relation(fields: [packageTypeId], references: [id], onDelete: Restrict)
+
+payments Payment[]
+featuredEvents ListingFeaturedEvent[]
+boostEvents ListingBoostEvent[]
+
+@@index([professionalProfileId])
+@@index([packageTypeId])
+@@index([status])
+@@index([purchasedAt])
+}
+
+model Payment {
+id String @id @default(uuid()) @db.Uuid
+professionalProfileId String @db.Uuid
+paymentType PaymentType
+relatedSubscriptionId String? @db.Uuid
+relatedPackagePurchaseId String? @db.Uuid
+
+amount Decimal @db.Decimal(10, 2)
+vatRate Decimal @default(21.00) @db.Decimal(5, 2)
+vatAmount Decimal @db.Decimal(10, 2)
+totalAmount Decimal @db.Decimal(10, 2)
+currency String @default("EUR")
+
+provider PaymentProvider
+paymentMethodType PaymentMethodType @default(CARD)
+externalPaymentId String?
+externalInvoiceId String?
+invoiceNumber String? @unique
+
+billingLegalName String
+billingTaxId String
+billingAddressLine1 String
+billingAddressLine2 String?
+billingPostalCode String
+billingCity String
+billingProvince String
+billingCountry String @default("España")
+
+status PaymentStatus @default(PENDING)
+paidAt DateTime?
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+professionalProfile ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+relatedSubscription Subscription? @relation(fields: [relatedSubscriptionId], references: [id], onDelete: SetNull)
+relatedPackagePurchase PackagePurchase? @relation(fields: [relatedPackagePurchaseId], references: [id], onDelete: SetNull)
+
+@@index([professionalProfileId])
+@@index([paymentType])
+@@index([provider])
+@@index([status])
+@@index([paidAt])
+}
+
+model ListingFeaturedEvent {
+id String @id @default(uuid()) @db.Uuid
+listingId String @db.Uuid
+subscriptionId String? @db.Uuid
+packagePurchaseId String? @db.Uuid
+activatedAt DateTime
+expiresAt DateTime
+status FeaturedEventStatus @default(ACTIVE)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+packagePurchase PackagePurchase? @relation(fields: [packagePurchaseId], references: [id], onDelete: SetNull)
+
+@@index([listingId])
+@@index([subscriptionId])
+@@index([packagePurchaseId])
+@@index([activatedAt])
+@@index([expiresAt])
+@@index([status])
+}
+
+model ListingBoostEvent {
+id String @id @default(uuid()) @db.Uuid
+listingId String @db.Uuid
+packagePurchaseId String @db.Uuid
+activatedAt DateTime
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+packagePurchase PackagePurchase @relation(fields: [packagePurchaseId], references: [id], onDelete: Cascade)
+
+@@index([listingId])
+@@index([packagePurchaseId])
+@@index([activatedAt])
+}
+
+model Conversation {
+id String @id @default(uuid()) @db.Uuid
+listingId String @db.Uuid
+professionalProfileId String @db.Uuid
+userId String @db.Uuid
+status ConversationStatus @default(ACTIVE)
+lastMessageAt DateTime?
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+professionalProfile ProfessionalProfile @relation(fields: [professionalProfileId], references: [id], onDelete: Cascade)
+user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+messages Message[]
+block ConversationBlock?
+
+@@unique([listingId, userId])
+@@index([professionalProfileId])
+@@index([status])
+@@index([lastMessageAt])
+}
+
+model Message {
+id String @id @default(uuid()) @db.Uuid
+conversationId String @db.Uuid
+senderUserId String @db.Uuid
+content String
+createdAt DateTime @default(now())
+readAt DateTime?
+
+conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+sender User @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+
+attachments MessageAttachment[]
+
+@@index([conversationId])
+@@index([senderUserId])
+@@index([createdAt])
+}
+
+model MessageAttachment {
+id String @id @default(uuid()) @db.Uuid
+messageId String @db.Uuid
+fileUrl String
+filePath String?
+fileSize Int
+fileType String
+createdAt DateTime @default(now())
+
+message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+@@index([messageId])
+}
+
+model ConversationBlock {
+id String @id @default(uuid()) @db.Uuid
+conversationId String @unique @db.Uuid
+blockedByUserId String @db.Uuid
+blockedAt DateTime @default(now())
+
+conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+blockedBy User @relation(fields: [blockedByUserId], references: [id], onDelete: Cascade)
+
+@@index([blockedByUserId])
+}
+
+model Review {
+id String @id @default(uuid()) @db.Uuid
+listingId String @db.Uuid
+userId String @db.Uuid
+rating Int
+comment String?
+status ReviewStatus @default(PUBLISHED)
+adminNotes String?
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+claim ReviewClaim?
+
+@@unique([listingId, userId])
+@@index([status])
+@@index([createdAt])
+}
+
+model ReviewClaim {
+id String @id @default(uuid()) @db.Uuid
+reviewId String @unique @db.Uuid
+claimedByProfessionalId String @db.Uuid
+resolvedByAdminUserId String? @db.Uuid
+reason String
+status ReviewClaimStatus @default(PENDING)
+adminNotes String?
+createdAt DateTime @default(now())
+resolvedAt DateTime?
+
+review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+claimedByProfessional ProfessionalProfile @relation(fields: [claimedByProfessionalId], references: [id], onDelete: Cascade)
+resolvedByAdmin User? @relation("ReviewClaimResolvedByAdmin", fields: [resolvedByAdminUserId], references: [id], onDelete: SetNull)
+
+@@index([claimedByProfessionalId])
+@@index([resolvedByAdminUserId])
+@@index([status])
+@@index([createdAt])
+}
+
+model Favorite {
+id String @id @default(uuid()) @db.Uuid
+userId String @db.Uuid
+listingId String @db.Uuid
+createdAt DateTime @default(now())
+
+user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+@@unique([userId, listingId])
+@@index([listingId])
+@@index([createdAt])
+}
+
+model Notification {
+id String @id @default(uuid()) @db.Uuid
+userId String @db.Uuid
+type NotificationType
+title String
+content String
+actionUrl String?
+isRead Boolean @default(false)
+createdAt DateTime @default(now())
+
+user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+@@index([userId])
+@@index([type])
+@@index([isRead])
+@@index([createdAt])
+}
+
+model RelaxRequest {
+id String @id @default(uuid()) @db.Uuid
+name String
+email String
+phone String
+specialtyId String? @db.Uuid
+description String
+postalCode String
+city String
+province String
+latitude Decimal? @db.Decimal(10, 7)
+longitude Decimal? @db.Decimal(10, 7)
+preferredContactTime String?
+source String?
+utmCampaign String?
+utmSource String?
+utmMedium String?
+ip String?
+status RelaxRequestStatus @default(NEW)
+adminNotes String?
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+specialty Specialty? @relation(fields: [specialtyId], references: [id], onDelete: SetNull)
+
+@@index([status])
+@@index([createdAt])
+@@index([city])
+@@index([province])
+@@index([postalCode])
+}
