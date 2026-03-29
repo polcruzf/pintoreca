@@ -33,23 +33,31 @@ export async function GET() {
 
     if (!clerkUser || !clerkUser.emailAddresses[0]?.emailAddress) {
       return NextResponse.json(
-        { error: "No se pudo obtener el email del usuario" },
+        { error: "No se pudo obtener el usuario de Clerk" },
         { status: 400 }
       );
     }
 
     const email = clerkUser.emailAddresses[0].emailAddress;
 
-const user = await prisma.user.findUnique({
-  where: { email },
-  include: {
-    professionalProfile: true,
-  },
-});
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        professionalProfile: {
+          include: {
+            listings: {
+              orderBy: {
+                createdAt: "desc",
+              },
+            },
+          },
+        },
+      },
+    });
 
     if (!user) {
       return NextResponse.json(
-        { error: "Usuario no encontrado en la base de datos" },
+        { error: "Usuario no encontrado" },
         { status: 404 }
       );
     }

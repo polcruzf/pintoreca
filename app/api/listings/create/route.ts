@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import "dotenv/config";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
@@ -19,10 +20,57 @@ const prisma = new PrismaClient({ adapter });
 
 export async function POST(request: Request) {
   try {
+    const { userId } = await auth();
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Usuario no autenticado" },
+        { status: 401 }
+      );
+    }
+
+    const clerkUser = await currentUser();
+
+    if (!clerkUser || !clerkUser.emailAddresses[0]?.emailAddress) {
+      return NextResponse.json(
+        { error: "No se pudo obtener el usuario de Clerk" },
+        { status: 400 }
+      );
+    }
+
+    const email = clerkUser.emailAddresses[0].emailAddress;
+
+    const dbUser = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        professionalProfile: true,
+      },
+    });
+
+    if (!dbUser) {
+      return NextResponse.json(
+        { error: "Usuario no encontrado en la base de datos" },
+        { status: 404 }
+      );
+    }
+
+    if (dbUser.role !== "PROFESSIONAL") {
+      return NextResponse.json(
+        { error: "Solo los profesionales pueden crear anuncios" },
+        { status: 403 }
+      );
+    }
+
+    if (!dbUser.professionalProfile) {
+      return NextResponse.json(
+        { error: "El usuario no tiene perfil profesional" },
+        { status: 404 }
+      );
+    }
+
     const body = await request.json();
 
     const {
-      professionalProfileId,
       displayName,
       description,
       yearsExperience,
@@ -40,7 +88,6 @@ export async function POST(request: Request) {
     } = body;
 
     if (
-      !professionalProfileId ||
       !displayName ||
       !description ||
       !yearsExperience ||
@@ -64,20 +111,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const professionalProfile = await prisma.professionalProfile.findUnique({
-      where: { id: professionalProfileId },
-    });
-
-    if (!professionalProfile) {
-      return NextResponse.json(
-        { error: "El perfil profesional no existe" },
-        { status: 404 }
-      );
-    }
-
     const listing = await prisma.listing.create({
       data: {
-        professionalProfileId,
+        professionalProfileId: dbUser.professionalProfile.id,
         slug: `${citySlug}-${Date.now()}`,
         displayName,
         description,

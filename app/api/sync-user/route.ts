@@ -43,23 +43,27 @@ export async function POST() {
       `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() ||
       "Usuario sin nombre";
 
-const existingUser = await prisma.user.findUnique({
-  where: { email },
-});
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        professionalProfile: true,
+      },
+    });
 
-if (existingUser) {
-  const updatedUser = await prisma.user.update({
-    where: { email },
-    data: {
-      name,
-    },
-  });
+    if (existingUser) {
+      const updatedUser = await prisma.user.update({
+        where: { email },
+        data: {
+          name,
+          role: existingUser.professionalProfile ? "PROFESSIONAL" : existingUser.role,
+        },
+      });
 
-  return NextResponse.json({
-    message: "Usuario actualizado correctamente",
-    user: updatedUser,
-  });
-}
+      return NextResponse.json({
+        message: "Usuario actualizado correctamente",
+        user: updatedUser,
+      });
+    }
 
     const user = await prisma.user.create({
       data: {

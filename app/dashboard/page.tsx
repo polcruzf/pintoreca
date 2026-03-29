@@ -1,108 +1,166 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
 
-type DbUser = {
+type Listing = {
+  id: string;
+  displayName: string;
+  status: string;
+  city: string;
+  postalCode: string;
+};
+
+type ProfessionalProfile = {
+  id: string;
+  listings?: Listing[];
+};
+
+type UserData = {
   id: string;
   name: string;
   email: string;
   role: string;
   status: string;
-  professionalProfile?: {
-    id: string;
-  } | null;
+  professionalProfile: ProfessionalProfile | null;
 };
 
 export default function DashboardPage() {
-  const { isLoaded, isSignedIn, user } = useUser();
-  const [syncMessage, setSyncMessage] = useState("Sincronizando...");
-  const [dbUser, setDbUser] = useState<DbUser | null>(null);
-  const [dbError, setDbError] = useState("");
+  const [message, setMessage] = useState("Sincronizando usuario...");
+  const [user, setUser] = useState<UserData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isLoaded) return;
-
-    if (!isSignedIn) {
-      setSyncMessage("No has iniciado sesión");
-      return;
-    }
-
-    const loadData = async () => {
+    const syncAndFetchUser = async () => {
       try {
-        const syncRes = await fetch("/api/sync-user", {
+        const syncResponse = await fetch("/api/sync-user", {
           method: "POST",
         });
 
-        const syncData = await syncRes.json();
+        const syncData = await syncResponse.json();
 
-        if (syncData.message) {
-          setSyncMessage(syncData.message);
-        } else if (syncData.error) {
-          setSyncMessage(syncData.error);
-        } else {
-          setSyncMessage("Respuesta no reconocida");
+        if (!syncResponse.ok) {
+          setMessage(syncData.error || "Error al sincronizar usuario");
+          setLoading(false);
+          return;
         }
 
-        const meRes = await fetch("/api/me");
-        const meData = await meRes.json();
+        setMessage(syncData.message || "Usuario sincronizado correctamente");
 
-        if (meData.user) {
-          setDbUser(meData.user);
-          setDbError("");
-        } else if (meData.error) {
-          setDbError(meData.error);
-        } else {
-          setDbError("No se pudieron cargar los datos del usuario");
+        const meResponse = await fetch("/api/me");
+        const meData = await meResponse.json();
+
+        if (!meResponse.ok) {
+          setMessage(meData.error || "Error al obtener datos del usuario");
+          setLoading(false);
+          return;
         }
+
+        setUser(meData.user);
+        setLoading(false);
       } catch (error) {
-        setSyncMessage("Error al sincronizar usuario");
-        setDbError("Error al cargar los datos de base de datos");
+        setMessage("Error de conexión con el servidor");
+        setLoading(false);
       }
     };
 
-    loadData();
-  }, [isLoaded, isSignedIn]);
+    syncAndFetchUser();
+  }, []);
+
+  if (loading) {
+    return (
+      <main style={{ padding: "40px" }}>
+        <h1>Mi panel</h1>
+        <p>{message}</p>
+      </main>
+    );
+  }
 
   return (
-    <div style={{ padding: "40px" }}>
+    <main style={{ padding: "40px", maxWidth: "900px" }}>
       <h1>Mi panel</h1>
 
-      {isSignedIn && <p>Hola, {user?.firstName || "usuario"}</p>}
+      {user && (
+        <div style={{ marginTop: "24px" }}>
+          <p>Hola, {user.name}</p>
+          <p>{message}</p>
 
-      <p>{syncMessage}</p>
+          <div style={{ marginTop: "32px" }}>
+            <h2>Datos en base de datos</h2>
+            <p>
+              <strong>ID:</strong> {user.id}
+            </p>
+            <p>
+              <strong>Nombre:</strong> {user.name}
+            </p>
+            <p>
+              <strong>Email:</strong> {user.email}
+            </p>
+            <p>
+              <strong>Rol:</strong> {user.role}
+            </p>
+            <p>
+              <strong>Estado:</strong> {user.status}
+            </p>
+            <p>
+              <strong>Perfil profesional:</strong>{" "}
+              {user.professionalProfile ? "Sí" : "No"}
+            </p>
 
-      <hr style={{ margin: "30px 0" }} />
+            {user.role === "PROFESSIONAL" ? (
+              <div style={{ marginTop: "24px" }}>
+                <p>
+                  <strong>Cuenta profesional detectada.</strong>
+                </p>
+                <p>Este usuario sí podrá crear anuncios.</p>
 
-      <h2>Datos en base de datos</h2>
+                <div style={{ marginTop: "32px" }}>
+                  <h2>Mis anuncios</h2>
 
-      {dbError && <p>{dbError}</p>}
-
-{dbUser && (
-  <div>
-    <p><strong>ID:</strong> {dbUser.id}</p>
-    <p><strong>Nombre:</strong> {dbUser.name}</p>
-    <p><strong>Email:</strong> {dbUser.email}</p>
-    <p><strong>Rol:</strong> {dbUser.role}</p>
-    <p><strong>Estado:</strong> {dbUser.status}</p>
-    <p>
-      <strong>Perfil profesional:</strong>{" "}
-      {dbUser.professionalProfile ? "Sí" : "No"}
-    </p>
-{dbUser.role === "PROFESSIONAL" ? (
-  <div style={{ marginTop: "20px" }}>
-    <p><strong>Cuenta profesional detectada.</strong></p>
-    <p>Este usuario sí podrá crear anuncios.</p>
-  </div>
-) : (
-  <div style={{ marginTop: "20px" }}>
-    <p><strong>Cuenta particular detectada.</strong></p>
-    <p>Este usuario no puede crear anuncios.</p>
-  </div>
-)}
-   
-  </div>
-)}
-    </div>
+                  {user.professionalProfile?.listings &&
+                  user.professionalProfile.listings.length > 0 ? (
+                    <div style={{ marginTop: "16px", display: "grid", gap: "16px" }}>
+                      {user.professionalProfile.listings.map((listing) => (
+                        <div
+                          key={listing.id}
+                          style={{
+                            border: "1px solid #ccc",
+                            borderRadius: "8px",
+                            padding: "16px",
+                          }}
+                        >
+                          <p>
+                            <strong>Nombre:</strong> {listing.displayName}
+                          </p>
+                          <p>
+                            <strong>Estado:</strong> {listing.status}
+                          </p>
+                          <p>
+                            <strong>Ciudad:</strong> {listing.city}
+                          </p>
+                          <p>
+                            <strong>Código postal:</strong> {listing.postalCode}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ marginTop: "16px" }}>
+                      Todavía no tienes anuncios creados.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: "24px" }}>
+                <p>
+                  <strong>Cuenta particular detectada.</strong>
+                </p>
+                <p>Este usuario no puede crear anuncios.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </main>
   );
 }
