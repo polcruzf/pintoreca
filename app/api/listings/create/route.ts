@@ -3,7 +3,12 @@ import "dotenv/config";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@prisma/client";
+import {
+  PrismaClient,
+  ExperienceRange,
+  AvailabilityOption,
+  BudgetType,
+} from "@prisma/client";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 
@@ -414,9 +419,9 @@ export async function POST(request: Request) {
         slug: `${citySlug}-${Date.now()}`,
         displayName,
         description,
-        yearsExperience,
-        availability,
-        budgetType,
+        yearsExperience: yearsExperience as ExperienceRange,
+availability: availability as AvailabilityOption,
+budgetType: budgetType as BudgetType,
         status: "DRAFT",
         city,
         citySlug,
