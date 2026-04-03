@@ -92,6 +92,8 @@ const [phoneMessage, setPhoneMessage] = useState("");
 
 // Mensajes anuncio
 const [listingMessage, setListingMessage] = useState("");
+const [imageMessages, setImageMessages] = useState<string[]>([]);
+const [imageMessageType, setImageMessageType] = useState<"info" | "error">("info");
 const [loading, setLoading] = useState(false);
 const [phoneLoading, setPhoneLoading] = useState(false);
 const [imagesOptimizing, setImagesOptimizing] = useState(false);
@@ -100,9 +102,13 @@ const [imagesOptimizing, setImagesOptimizing] = useState(false);
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [phone, setPhone] = useState("");
   const [phoneSaved, setPhoneSaved] = useState(false);
-  const [images, setImages] = useState<File[]>([]);
-  const [imagesTouched, setImagesTouched] = useState(false);
-  const [mainImageIndex, setMainImageIndex] = useState(0);
+const [images, setImages] = useState<File[]>([]);
+const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+const [imagesTouched, setImagesTouched] = useState(false);
+const [mainImageIndex, setMainImageIndex] = useState(0);
+const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
+const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+const [dragInsertPosition, setDragInsertPosition] = useState<"before" | "after" | null>(null);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -176,6 +182,104 @@ if (userData.user?.professionalProfile?.phone) {
 
     return compressedFiles;
   };
+
+    const processIncomingImages = async (incomingFiles: File[]) => {
+    const files = Array.from(incomingFiles || []);
+    if (files.length === 0) return;
+
+    const availableSlots = 8 - images.length;
+
+    setImagesTouched(true);
+    setListingMessage("");
+    setImageMessages([]);
+    setImageMessageType("info");
+
+    if (availableSlots <= 0) {
+      setImageMessages(["Ya has alcanzado el máximo de 8 imágenes"]);
+      setImageMessageType("error");
+      return;
+    }
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp"];
+    const maxSizeBytes = 5 * 1024 * 1024;
+    const nextImageMessages: string[] = [];
+
+    const incompatibleFiles = files.filter(
+      (file) => !validTypes.includes(file.type)
+    );
+
+    if (incompatibleFiles.length > 0) {
+      nextImageMessages.push(
+        "Archivo no compatible. Solo se permiten imágenes JPG, PNG y WEBP"
+      );
+    }
+
+    const oversizedFiles = files.filter(
+      (file) => file.size > maxSizeBytes
+    );
+
+    if (oversizedFiles.length > 0) {
+      nextImageMessages.push(
+        "El tamaño de una o varias imágenes es superior a 5 MB"
+      );
+    }
+
+    const validFiles = files.filter(
+      (file) =>
+        validTypes.includes(file.type) && file.size <= maxSizeBytes
+    );
+
+    const nonDuplicateFiles = validFiles.filter((file) => {
+      return !images.some(
+        (existingImage) => existingImage.name === file.name
+      );
+    });
+
+    if (nonDuplicateFiles.length < validFiles.length) {
+      nextImageMessages.push("Algunas imágenes duplicadas no se han añadido");
+    }
+
+    const limitedFiles = nonDuplicateFiles.slice(0, availableSlots);
+
+    if (nonDuplicateFiles.length > availableSlots) {
+      nextImageMessages.push(
+        `Solo puedes añadir ${availableSlots} imagen(es) más`
+      );
+    }
+
+    if (nextImageMessages.length > 0) {
+      setImageMessages(nextImageMessages);
+      setImageMessageType("error");
+    }
+
+    if (limitedFiles.length === 0) return;
+
+    try {
+      setImagesOptimizing(true);
+      const compressedFiles = await compressImagesBeforeUpload(limitedFiles);
+
+      setImages((prev) => [...prev, ...compressedFiles]);
+
+      if (images.length === 0) {
+        setMainImageIndex(0);
+      }
+    } catch (error) {
+      console.error("Error al optimizar imágenes:", error);
+      setImageMessages(["No se pudieron optimizar las imágenes"]);
+      setImageMessageType("error");
+    } finally {
+      setImagesOptimizing(false);
+    }
+  };
+
+    useEffect(() => {
+    const previewUrls = images.map((image) => URL.createObjectURL(image));
+    setImagePreviews(previewUrls);
+
+    return () => {
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [images]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -329,11 +433,16 @@ setPricePerM2("");
 setAvailability("MONDAY_TO_FRIDAY");
 setBudgetType("FREE");
 setYearsExperience("EXPERIENCE_10_20");
+setImages([]);
+setImagePreviews([]);
+setImagesTouched(false);
+setMainImageIndex(0);
 
 if (specialties.length > 0) {
   setSelectedSpecialtyId(specialties[0].id);
 }
-      setLoading(false);
+
+setLoading(false);
     } catch (error) {
       setListingMessage("Error de conexión");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -402,6 +511,84 @@ const handleEditPhone = () => {
   setPhoneMessage("");
   setListingMessage("");
   window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+const moveImage = (fromIndex: number, toIndex: number) => {
+  if (fromIndex < 0 || toIndex < 0) return;
+  if (fromIndex >= images.length || toIndex > images.length) return;
+
+  let finalToIndex = toIndex;
+
+  if (fromIndex < toIndex) {
+    finalToIndex = toIndex - 1;
+  }
+
+  if (fromIndex === finalToIndex) return;
+
+  setImages((prev) => {
+    const updated = [...prev];
+    const [movedImage] = updated.splice(fromIndex, 1);
+    updated.splice(finalToIndex, 0, movedImage);
+    return updated;
+  });
+
+  if (mainImageIndex === fromIndex) {
+    setMainImageIndex(finalToIndex);
+  } else if (
+    fromIndex < finalToIndex &&
+    mainImageIndex > fromIndex &&
+    mainImageIndex <= finalToIndex
+  ) {
+    setMainImageIndex((prev) => prev - 1);
+  } else if (
+    fromIndex > finalToIndex &&
+    mainImageIndex >= finalToIndex &&
+    mainImageIndex < fromIndex
+  ) {
+    setMainImageIndex((prev) => prev + 1);
+  }
+};
+const preventButtonDrag = (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.stopPropagation();
+};
+const removeImage = (indexToRemove: number) => {
+  setImages((prev) => {
+    const updated = prev.filter((_, i) => i !== indexToRemove);
+
+    if (updated.length === 0) {
+      setImageMessages([]);
+      setImagesTouched(false);
+      setMainImageIndex(0);
+    } else {
+      if (indexToRemove === mainImageIndex) {
+        setMainImageIndex(0);
+      } else if (indexToRemove < mainImageIndex) {
+        setMainImageIndex((prevMainImageIndex) => prevMainImageIndex - 1);
+      }
+    }
+
+    return updated;
+  });
+};
+const setAsMainImage = (indexToSet: number) => {
+  if (indexToSet < 0 || indexToSet >= images.length) return;
+  if (indexToSet === mainImageIndex) return;
+
+  setMainImageIndex(indexToSet);
+};
+const moveImageLeft = (indexToMove: number) => {
+  if (indexToMove <= 0) return;
+  moveImage(indexToMove, indexToMove - 1);
+};
+
+const moveImageRight = (indexToMove: number) => {
+  if (indexToMove >= images.length - 1) return;
+  moveImage(indexToMove, indexToMove + 2);
+};
+const resetDragState = () => {
+  setDraggedImageIndex(null);
+  setDragOverIndex(null);
+  setDragInsertPosition(null);
 };
 
   if (checkingUser) {
@@ -648,6 +835,29 @@ const handleEditPhone = () => {
            <label className="label">
         Imágenes del anuncio <span className="required">*</span>
       </label>
+      <div
+  onDragOver={(e) => e.preventDefault()}
+  onDrop={async (e) => {
+    e.preventDefault();
+    await processIncomingImages(Array.from(e.dataTransfer.files || []));
+  }}
+  style={{
+    minHeight: "100px",
+    borderRadius: "6px",
+    border: "2px dashed #bbb",
+    backgroundColor: "#fafafa",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "14px",
+    color: "#666",
+    padding: "16px",
+    marginBottom: "12px",
+    textAlign: "center",
+  }}
+>
+  Suelta aquí tus imágenes para subirlas
+</div>
 
       <input
         type="file"
@@ -655,35 +865,15 @@ const handleEditPhone = () => {
         multiple
         disabled={imagesOptimizing}
         onChange={async (e) => {
-          const files = Array.from(e.target.files || []);
-          const limitedFiles = files.slice(0, 8);
-
-          setImagesTouched(true);
-          setListingMessage("");
-
-          if (limitedFiles.length === 0) {
-            setImages([]);
-            setMainImageIndex(0);
-            return;
-          }
-
-          try {
-            setImagesOptimizing(true);
-            const compressedFiles = await compressImagesBeforeUpload(limitedFiles);
-            setImages(compressedFiles);
-            setMainImageIndex(0);
-          } catch (error) {
-            console.error("Error al optimizar imágenes:", error);
-            setListingMessage("No se pudieron optimizar las imágenes");
-          } finally {
-            setImagesOptimizing(false);
-          }
+          const input = e.target;
+          await processIncomingImages(Array.from(input.files || []));
+          input.value = "";
         }}
         className="input"
       />
 
       <p style={{ marginTop: "10px", marginBottom: 0, fontSize: "14px" }}>
-        Puedes subir entre 1 y 8 imágenes. Se optimizarán automáticamente antes del envío.
+                Puedes subir entre 1 y 8 imágenes. Puedes añadir más en varias tandas. Se optimizarán automáticamente antes del envío.
       </p>
 
       {imagesOptimizing && (
@@ -691,9 +881,21 @@ const handleEditPhone = () => {
           Optimizando imágenes... espera un momento.
         </p>
       )}
-
+      {imageMessages.length > 0 && (
+        <div>
+          {imageMessages.map((message, index) => (
+            <p
+              key={index}
+              className={imageMessageType === "error" ? "form-helper-error" : "form-helper-info"}
+            >
+              {message}
+            </p>
+          ))}
+        </div>
+      )}
+</div>
       <p style={{ marginTop: "8px", marginBottom: 0, fontSize: "14px" }}>
-        La imagen principal será la que se mostrará primero en los resultados.
+                La imagen principal será la que se mostrará primero en los resultados. También puedes cambiar el orden con las flechas.
       </p>
 
 {imagesTouched && images.length === 0 && (
@@ -716,10 +918,49 @@ const handleEditPhone = () => {
       gap: "10px",
     }}
   >
-   {images.map((image, index) => (
-  <div key={index} style={{ position: "relative" }}>
+{images.map((image, index) => (
+  <div
+    key={index}
+    draggable
+    onDragStart={() => {
+      setDraggedImageIndex(index);
+    }}
+    onDragOver={(e) => {
+  e.preventDefault();
+
+  const rect = e.currentTarget.getBoundingClientRect();
+  const middleX = rect.left + rect.width / 2;
+  const position = e.clientX < middleX ? "before" : "after";
+
+  setDragOverIndex(index);
+  setDragInsertPosition(position);
+}}
+onDrop={() => {
+  if (draggedImageIndex === null) return;
+
+  const targetIndex =
+    dragInsertPosition === "after" ? index + 1 : index;
+
+  moveImage(draggedImageIndex, targetIndex);
+  resetDragState();
+}}
+onDragEnd={() => {
+  resetDragState();
+}}
+    style={{
+  position: "relative",
+  cursor: "grab",
+  outline: "none",
+  boxShadow:
+    dragOverIndex === index && dragInsertPosition === "before"
+      ? "inset 4px 0 0 #111"
+      : dragOverIndex === index && dragInsertPosition === "after"
+      ? "inset -4px 0 0 #111"
+      : "none",
+}}
+  >
     <img
-      src={URL.createObjectURL(image)}
+      src={imagePreviews[index]}
       alt={`preview-${index}`}
       style={{
         width: "100%",
@@ -727,6 +968,11 @@ const handleEditPhone = () => {
         objectFit: "cover",
         borderRadius: "6px",
         border: index === mainImageIndex ? "3px solid #111" : "1px solid #ddd",
+        boxShadow:
+          index === mainImageIndex
+            ? "0 0 0 2px rgba(17, 17, 17, 0.08), 0 6px 16px rgba(0, 0, 0, 0.12)"
+            : "none",
+        opacity: draggedImageIndex === index ? 0.6 : 1,
       }}
     />
 
@@ -747,37 +993,83 @@ const handleEditPhone = () => {
       </div>
     )}
 
+{index !== mainImageIndex && (
+  <button
+    type="button"
+    onMouseDown={preventButtonDrag}
+    onClick={() => {
+      setAsMainImage(index);
+    }}
+    style={{
+      position: "absolute",
+      left: "6px",
+      bottom: "6px",
+      background: "#fff",
+      color: "#111",
+      border: "1px solid #111",
+      borderRadius: "999px",
+      padding: "4px 8px",
+      cursor: "pointer",
+      fontSize: "12px",
+    }}
+  >
+    Hacer principal
+  </button>
+)}
+
     <button
       type="button"
+      onMouseDown={preventButtonDrag}
       onClick={() => {
-        setMainImageIndex(index);
+        moveImageLeft(index);
       }}
+      disabled={index === 0}
       style={{
         position: "absolute",
         left: "6px",
-        top: "6px",
+        bottom: "34px",
         background: "#fff",
         color: "#111",
         border: "1px solid #111",
         borderRadius: "999px",
         padding: "4px 8px",
-        cursor: "pointer",
+        cursor: index === 0 ? "not-allowed" : "pointer",
         fontSize: "12px",
+        opacity: index === 0 ? 0.5 : 1,
       }}
     >
-      {index === mainImageIndex ? "Principal" : "Hacer principal"}
+      ←
     </button>
 
     <button
       type="button"
+      onMouseDown={preventButtonDrag}
       onClick={() => {
-        setImages((prev) => prev.filter((_, i) => i !== index));
+        moveImageRight(index);
+      }}
+      disabled={index === images.length - 1}
+      style={{
+        position: "absolute",
+        left: "46px",
+        bottom: "34px",
+        background: "#fff",
+        color: "#111",
+        border: "1px solid #111",
+        borderRadius: "999px",
+        padding: "4px 8px",
+        cursor: index === images.length - 1 ? "not-allowed" : "pointer",
+        fontSize: "12px",
+        opacity: index === images.length - 1 ? 0.5 : 1,
+      }}
+    >
+      →
+    </button>
 
-        if (index === mainImageIndex) {
-          setMainImageIndex(0);
-        } else if (index < mainImageIndex) {
-          setMainImageIndex((prev) => prev - 1);
-        }
+    <button
+      type="button"
+      onMouseDown={preventButtonDrag}
+      onClick={() => {
+        removeImage(index);
       }}
       style={{
         position: "absolute",
@@ -799,10 +1091,41 @@ const handleEditPhone = () => {
     </button>
   </div>
 ))}
+
+<div
+  onDragOver={(e) => {
+    e.preventDefault();
+    setDragOverIndex(images.length);
+    setDragInsertPosition("after");
+  }}
+onDrop={() => {
+  if (draggedImageIndex === null) return;
+  moveImage(draggedImageIndex, images.length);
+  resetDragState();
+}}
+onDragEnd={() => {
+  resetDragState();
+}}
+  style={{
+    minHeight: "100px",
+    borderRadius: "6px",
+    border: "2px dashed #bbb",
+    backgroundColor: dragOverIndex === images.length ? "#f5f5f5" : "transparent",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "13px",
+    color: "#666",
+    padding: "10px",
+  }}
+>
+  Suelta aquí para mover al final
+</div>
+
   </div>
 )}
-    </div>
-  </div>
+
+</div>
 </div>
 
         <div
