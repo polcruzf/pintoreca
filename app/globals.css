@@ -24,3 +24,38 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.required {
+  color: #b02a37;
+}
+
+.form-helper-error {
+  margin-top: 10px;
+  margin-bottom: 0;
+  font-size: 14px;
+  color: #b02a37;
+}
+
+.label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.input,
+.select,
+.textarea {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #000;
+}
+
+.form-helper-info {
+  margin-top: 8px;
+  margin-bottom: 0;
+  font-size: 14px;
+  color: #1d4ed8;
+}
