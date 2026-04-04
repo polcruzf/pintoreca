@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import imageCompression from "browser-image-compression";
 
 type UserData = {
@@ -109,6 +109,8 @@ const [mainImageIndex, setMainImageIndex] = useState(0);
 const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
 const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 const [dragInsertPosition, setDragInsertPosition] = useState<"before" | "after" | null>(null);
+const draggedImageIndexRef = useRef<number | null>(null);
+const transparentDragImageRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -280,6 +282,14 @@ if (userData.user?.professionalProfile?.phone) {
       previewUrls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [images]);
+
+  useEffect(() => {
+  const transparentPixel = new Image();
+  transparentPixel.src =
+    "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+  transparentDragImageRef.current = transparentPixel;
+}, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -513,17 +523,23 @@ const handleEditPhone = () => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
-const moveImage = (fromIndex: number, toIndex: number) => {
-  if (fromIndex < 0 || toIndex < 0) return;
-  if (fromIndex >= images.length || toIndex > images.length) return;
-
+const getFinalDropIndex = (fromIndex: number, toIndex: number) => {
   let finalToIndex = toIndex;
 
   if (fromIndex < toIndex) {
     finalToIndex = toIndex - 1;
   }
 
-  if (fromIndex === finalToIndex) return;
+  return finalToIndex;
+};
+
+const moveImage = (fromIndex: number, toIndex: number) => {
+  if (fromIndex < 0 || toIndex < 0) return fromIndex;
+  if (fromIndex >= images.length || toIndex > images.length) return fromIndex;
+
+  const finalToIndex = getFinalDropIndex(fromIndex, toIndex);
+
+  if (fromIndex === finalToIndex) return finalToIndex;
 
   setImages((prev) => {
     const updated = [...prev];
@@ -547,6 +563,8 @@ const moveImage = (fromIndex: number, toIndex: number) => {
   ) {
     setMainImageIndex((prev) => prev + 1);
   }
+
+  return finalToIndex;
 };
 const preventButtonDrag = (e: React.MouseEvent<HTMLButtonElement>) => {
   e.stopPropagation();
@@ -586,6 +604,7 @@ const moveImageRight = (indexToMove: number) => {
   moveImage(indexToMove, indexToMove + 2);
 };
 const resetDragState = () => {
+  draggedImageIndexRef.current = null;
   setDraggedImageIndex(null);
   setDragOverIndex(null);
   setDragInsertPosition(null);
@@ -841,20 +860,7 @@ const resetDragState = () => {
     e.preventDefault();
     await processIncomingImages(Array.from(e.dataTransfer.files || []));
   }}
-  style={{
-    minHeight: "100px",
-    borderRadius: "6px",
-    border: "2px dashed #bbb",
-    backgroundColor: "#fafafa",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "14px",
-    color: "#666",
-    padding: "16px",
-    marginBottom: "12px",
-    textAlign: "center",
-  }}
+  className="listing-image-dropzone"
 >
   Suelta aquí tus imágenes para subirlas
 </div>
@@ -872,8 +878,8 @@ const resetDragState = () => {
         className="input"
       />
 
-      <p style={{ marginTop: "10px", marginBottom: 0, fontSize: "14px" }}>
-                Puedes subir entre 1 y 8 imágenes. Puedes añadir más en varias tandas. Se optimizarán automáticamente antes del envío.
+      <p className="listing-image-help-text">
+        Puedes subir entre 1 y 8 imágenes. Puedes añadir más en varias tandas. Se optimizarán automáticamente antes del envío.
       </p>
 
       {imagesOptimizing && (
@@ -894,8 +900,8 @@ const resetDragState = () => {
         </div>
       )}
 </div>
-      <p style={{ marginTop: "8px", marginBottom: 0, fontSize: "14px" }}>
-                La imagen principal será la que se mostrará primero en los resultados. También puedes cambiar el orden con las flechas.
+      <p className="listing-image-order-help">
+        La imagen principal será la que se mostrará primero en los resultados. También puedes cambiar el orden con las flechas.
       </p>
 
 {imagesTouched && images.length === 0 && (
@@ -905,68 +911,72 @@ const resetDragState = () => {
 )}
 
       {images.length > 0 && (
-        <p style={{ marginTop: "8px", marginBottom: 0, fontSize: "14px" }}>
+        <p className="listing-image-count">
           {images.length} imagen(es) seleccionada(s)
         </p>
       )}
       {images.length > 0 && (
-  <div
-    style={{
-      marginTop: "12px",
-      display: "grid",
-      gridTemplateColumns: "repeat(4, 1fr)",
-      gap: "10px",
-    }}
-  >
+  <div className="listing-image-grid">
 {images.map((image, index) => (
-  <div
-    key={index}
-    draggable
-    onDragStart={() => {
-      setDraggedImageIndex(index);
-    }}
-    onDragOver={(e) => {
-  e.preventDefault();
+    <div
+      key={index}
+      draggable
+onDragStart={(e) => {
+  draggedImageIndexRef.current = index;
+  setDraggedImageIndex(index);
 
-  const rect = e.currentTarget.getBoundingClientRect();
-  const middleX = rect.left + rect.width / 2;
-  const position = e.clientX < middleX ? "before" : "after";
+  if (transparentDragImageRef.current) {
+    e.dataTransfer.setDragImage(transparentDragImageRef.current, 0, 0);
+  }
 
-  setDragOverIndex(index);
-  setDragInsertPosition(position);
+  e.dataTransfer.effectAllowed = "move";
 }}
-onDrop={() => {
-  if (draggedImageIndex === null) return;
+      onDragOver={(e) => {
+        e.preventDefault();
 
-  const targetIndex =
-    dragInsertPosition === "after" ? index + 1 : index;
+        const currentDraggedIndex = draggedImageIndexRef.current;
+        if (currentDraggedIndex === null) return;
 
-  moveImage(draggedImageIndex, targetIndex);
-  resetDragState();
-}}
-onDragEnd={() => {
-  resetDragState();
-}}
-    style={{
-  position: "relative",
-  cursor: "grab",
-  outline: "none",
-  boxShadow:
-    dragOverIndex === index && dragInsertPosition === "before"
-      ? "inset 4px 0 0 #111"
-      : dragOverIndex === index && dragInsertPosition === "after"
-      ? "inset -4px 0 0 #111"
-      : "none",
-}}
-  >
+        const rect = e.currentTarget.getBoundingClientRect();
+        const middleX = rect.left + rect.width / 2;
+        const position = e.clientX < middleX ? "before" : "after";
+
+        setDragOverIndex(index);
+        setDragInsertPosition(position);
+
+        const targetIndex = position === "after" ? index + 1 : index;
+        const finalTargetIndex = getFinalDropIndex(currentDraggedIndex, targetIndex);
+
+        if (currentDraggedIndex === finalTargetIndex) return;
+
+        const newIndex = moveImage(currentDraggedIndex, targetIndex);
+        draggedImageIndexRef.current = newIndex;
+        setDraggedImageIndex(newIndex);
+      }}
+      onDrop={() => {
+        resetDragState();
+      }}
+      onDragEnd={() => {
+        resetDragState();
+      }}
+      className={`listing-image-card${
+        draggedImageIndex === index ? " is-dragging" : ""
+      }${
+        dragOverIndex === index && dragInsertPosition === "before"
+          ? " is-drag-over-before"
+          : ""
+      }${
+        dragOverIndex === index && dragInsertPosition === "after"
+          ? " is-drag-over-after"
+          : ""
+      }`}
+    >
     <img
       src={imagePreviews[index]}
       alt={`preview-${index}`}
+      draggable={false}
+      className="listing-image-preview"
       style={{
-        width: "100%",
-        height: "100px",
-        objectFit: "cover",
-        borderRadius: "6px",
         border: index === mainImageIndex ? "3px solid #111" : "1px solid #ddd",
         boxShadow:
           index === mainImageIndex
@@ -977,18 +987,7 @@ onDragEnd={() => {
     />
 
     {index === mainImageIndex && (
-      <div
-        style={{
-          position: "absolute",
-          left: "6px",
-          bottom: "6px",
-          backgroundColor: "#111",
-          color: "#fff",
-          fontSize: "12px",
-          padding: "4px 8px",
-          borderRadius: "999px",
-        }}
-      >
+      <div className="listing-image-badge-main">
         Principal
       </div>
     )}
@@ -1000,18 +999,7 @@ onDragEnd={() => {
     onClick={() => {
       setAsMainImage(index);
     }}
-    style={{
-      position: "absolute",
-      left: "6px",
-      bottom: "6px",
-      background: "#fff",
-      color: "#111",
-      border: "1px solid #111",
-      borderRadius: "999px",
-      padding: "4px 8px",
-      cursor: "pointer",
-      fontSize: "12px",
-    }}
+    className="listing-image-action-button listing-image-make-main-button"
   >
     Hacer principal
   </button>
@@ -1024,19 +1012,7 @@ onDragEnd={() => {
         moveImageLeft(index);
       }}
       disabled={index === 0}
-      style={{
-        position: "absolute",
-        left: "6px",
-        bottom: "34px",
-        background: "#fff",
-        color: "#111",
-        border: "1px solid #111",
-        borderRadius: "999px",
-        padding: "4px 8px",
-        cursor: index === 0 ? "not-allowed" : "pointer",
-        fontSize: "12px",
-        opacity: index === 0 ? 0.5 : 1,
-      }}
+      className="listing-image-action-button listing-image-move-left-button"
     >
       ←
     </button>
@@ -1048,19 +1024,7 @@ onDragEnd={() => {
         moveImageRight(index);
       }}
       disabled={index === images.length - 1}
-      style={{
-        position: "absolute",
-        left: "46px",
-        bottom: "34px",
-        background: "#fff",
-        color: "#111",
-        border: "1px solid #111",
-        borderRadius: "999px",
-        padding: "4px 8px",
-        cursor: index === images.length - 1 ? "not-allowed" : "pointer",
-        fontSize: "12px",
-        opacity: index === images.length - 1 ? 0.5 : 1,
-      }}
+      className="listing-image-action-button listing-image-move-right-button"
     >
       →
     </button>
@@ -1071,21 +1035,7 @@ onDragEnd={() => {
       onClick={() => {
         removeImage(index);
       }}
-      style={{
-        position: "absolute",
-        top: "6px",
-        right: "6px",
-        background: "#000",
-        color: "#fff",
-        border: "none",
-        borderRadius: "50%",
-        width: "24px",
-        height: "24px",
-        cursor: "pointer",
-        fontSize: "14px",
-        lineHeight: "24px",
-        padding: 0,
-      }}
+      className="listing-image-remove-button"
     >
       ×
     </button>
@@ -1095,29 +1045,30 @@ onDragEnd={() => {
 <div
   onDragOver={(e) => {
     e.preventDefault();
+
+    const currentDraggedIndex = draggedImageIndexRef.current;
+    if (currentDraggedIndex === null) return;
+
     setDragOverIndex(images.length);
     setDragInsertPosition("after");
+
+    const finalTargetIndex = getFinalDropIndex(currentDraggedIndex, images.length);
+
+    if (currentDraggedIndex === finalTargetIndex) return;
+
+    const newIndex = moveImage(currentDraggedIndex, images.length);
+    draggedImageIndexRef.current = newIndex;
+    setDraggedImageIndex(newIndex);
   }}
-onDrop={() => {
-  if (draggedImageIndex === null) return;
-  moveImage(draggedImageIndex, images.length);
-  resetDragState();
-}}
-onDragEnd={() => {
-  resetDragState();
-}}
-  style={{
-    minHeight: "100px",
-    borderRadius: "6px",
-    border: "2px dashed #bbb",
-    backgroundColor: dragOverIndex === images.length ? "#f5f5f5" : "transparent",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "13px",
-    color: "#666",
-    padding: "10px",
+  onDrop={() => {
+    resetDragState();
   }}
+  onDragEnd={() => {
+    resetDragState();
+  }}
+  className={`listing-image-move-end-dropzone${
+    dragOverIndex === images.length ? " is-active" : ""
+  }`}
 >
   Suelta aquí para mover al final
 </div>
