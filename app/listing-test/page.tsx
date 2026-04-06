@@ -10,6 +10,16 @@ import type {
   ListingImagesBlockProps,
 } from "@/types/listing-images";
 
+function sanitizePostalCode(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  return digits.slice(0, 5);
+}
+
+function isInvalidPrice(value: string): boolean {
+  if (value === "") return false;
+  return Number(value) <= 0;
+}
+
 type UserData = {
   id: string;
   name: string;
@@ -27,6 +37,455 @@ type Specialty = {
   name: string;
 };
 
+type ProfessionalPhoneBlockProps = Readonly<{
+  phoneMessage: string;
+  phoneSaved: boolean;
+  phone: string;
+  phoneLoading: boolean;
+  currentPhone?: string | null;
+  onPhoneChange: (value: string) => void;
+  onSavePhone: () => void;
+  onEditPhone: () => void;
+}>;
+
+function ProfessionalPhoneBlock({
+  phoneMessage,
+  phoneSaved,
+  phone,
+  phoneLoading,
+  onPhoneChange,
+  onSavePhone,
+  onEditPhone,
+}: ProfessionalPhoneBlockProps) {
+  return (
+    <>
+      {phoneMessage && (
+        <p
+          className={`form-message ${
+            phoneMessage.includes("✅") ? "is-success" : "is-error"
+          }`}
+        >
+          {phoneMessage}
+        </p>
+      )}
+
+      {phoneSaved ? (
+        <div className="phone-status-card">
+          <h2 className="phone-status-title">
+            ✅ Teléfono profesional ya guardado
+          </h2>
+
+          <p className="phone-status-text">
+            No es necesario volver a añadirlo para crear anuncios.
+          </p>
+
+          <button
+            type="button"
+            onClick={onEditPhone}
+            className="phone-status-button"
+          >
+            Cambiar teléfono
+          </button>
+        </div>
+      ) : (
+        <div className="phone-required-card">
+          <h2 className="phone-required-title">
+            Teléfono profesional (obligatorio)
+          </h2>
+
+          <div className="phone-required-warning">
+            Debes añadir y guardar tu teléfono profesional antes de poder crear
+            anuncios.
+          </div>
+
+          <div className="form-actions-row">
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => onPhoneChange(e.target.value.replace(/\D/g, ""))}
+              maxLength={9}
+              placeholder="Ej: 600123456"
+              className="input form-input-grow"
+            />
+
+            <button
+              type="button"
+              onClick={onSavePhone}
+              disabled={phoneLoading || phone.length !== 9}
+              className={`phone-save-button ${
+                phoneLoading || phone.length !== 9 ? "is-disabled" : ""
+              }`}
+            >
+              {phoneLoading ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
+
+          {phone.length > 0 && phone.length < 9 && (
+            <p className="form-helper-error">
+              El teléfono debe tener exactamente 9 dígitos.
+            </p>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+type ListingMessageBlockProps = Readonly<{
+  listingMessage: string;
+}>;
+
+function ListingMessageBlock({
+  listingMessage,
+}: ListingMessageBlockProps) {
+  if (!listingMessage) return null;
+
+  return (
+    <p
+      className={`form-message ${
+        listingMessage.includes("✅") ? "is-success" : "is-error"
+      }`}
+    >
+      {listingMessage}
+    </p>
+  );
+}
+
+type TermsCheckboxBlockProps = Readonly<{
+  acceptTerms: boolean;
+  onChange: (value: boolean) => void;
+}>;
+
+function TermsCheckboxBlock({
+  acceptTerms,
+  onChange,
+}: TermsCheckboxBlockProps) {
+  return (
+    <label className="form-checkbox-row">
+      <input
+        type="checkbox"
+        checked={acceptTerms}
+        onChange={(e) => onChange(e.target.checked)}
+        className="form-checkbox-input"
+      />
+      <span>
+        Confirmo que la información del anuncio es veraz y acepto los términos
+        aplicables a la publicación.
+      </span>
+    </label>
+  );
+}
+
+type ListingSubmitButtonProps = Readonly<{
+  loading: boolean;
+  imagesOptimizing: boolean;
+  phoneSaved: boolean;
+}>;
+
+function ListingSubmitButton({
+  loading,
+  imagesOptimizing,
+  phoneSaved,
+}: ListingSubmitButtonProps) {
+  return (
+    <button
+      type="submit"
+      disabled={loading || imagesOptimizing || !phoneSaved}
+      className={`form-submit-button${
+        loading || imagesOptimizing || !phoneSaved ? " is-disabled" : ""
+      }`}
+    >
+      {loading
+        ? "Creando..."
+        : imagesOptimizing
+        ? "Optimizando imágenes..."
+        : !phoneSaved
+        ? "Guarda tu teléfono para continuar"
+        : "Crear anuncio"}
+    </button>
+  );
+}
+
+type ListingBasicDataSectionProps = Readonly<{
+  displayName: string;
+  description: string;
+  selectedSpecialtyId: string;
+  specialties: Specialty[];
+  onDisplayNameChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
+  onSelectedSpecialtyIdChange: (value: string) => void;
+}>;
+
+function ListingBasicDataSection({
+  displayName,
+  description,
+  selectedSpecialtyId,
+  specialties,
+  onDisplayNameChange,
+  onDescriptionChange,
+  onSelectedSpecialtyIdChange,
+}: ListingBasicDataSectionProps) {
+  return (
+    <div className="form-section-card">
+      <h2 className="form-section-title">Datos del anuncio</h2>
+
+      <div className="form-section-fields">
+        <div>
+          <label className="label">
+            Nombre del anuncio <span className="required">*</span>
+          </label>
+          <input
+            type="text"
+            value={displayName}
+            onChange={(e) => onDisplayNameChange(e.target.value)}
+            className="input"
+          />
+
+          {displayName.trim().length > 0 && displayName.trim().length < 3 && (
+            <p className="form-helper-error">
+              El nombre del anuncio debe tener al menos 3 caracteres.
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="label">
+            Descripción <span className="required">*</span>
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            rows={5}
+            className="textarea textarea-resize-vertical"
+          />
+
+          {description.trim().length > 0 &&
+            description.trim().length < 10 && (
+              <p className="form-helper-error">
+                La descripción debe tener al menos 10 caracteres.
+              </p>
+            )}
+        </div>
+
+        <div>
+          <label className="label">
+            Especialidad <span className="required">*</span>
+          </label>
+          <select
+            value={selectedSpecialtyId}
+            onChange={(e) => onSelectedSpecialtyIdChange(e.target.value)}
+            className="select"
+          >
+            {specialties.map((specialty) => (
+              <option key={specialty.id} value={specialty.id}>
+                {specialty.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type ListingServiceConditionsSectionProps = Readonly<{
+  pricePerM2: string;
+  availability: string;
+  budgetType: string;
+  yearsExperience: string;
+  onPricePerM2Change: (value: string) => void;
+  onAvailabilityChange: (value: string) => void;
+  onBudgetTypeChange: (value: string) => void;
+  onYearsExperienceChange: (value: string) => void;
+}>;
+
+function ListingServiceConditionsSection({
+  pricePerM2,
+  availability,
+  budgetType,
+  yearsExperience,
+  onPricePerM2Change,
+  onAvailabilityChange,
+  onBudgetTypeChange,
+  onYearsExperienceChange,
+}: ListingServiceConditionsSectionProps) {
+  return (
+    <div className="form-section-card">
+      <h2 className="form-section-title">Condiciones del servicio</h2>
+
+      <div className="form-section-fields">
+        <div>
+          <label className="label">
+            Precio por m² <span className="required">*</span>
+          </label>
+          <input
+            type="number"
+            value={pricePerM2}
+            onChange={(e) => onPricePerM2Change(e.target.value)}
+            min="1"
+            step="0.01"
+            className="input"
+          />
+
+{isInvalidPrice(pricePerM2) && (
+  <p className="form-helper-error">
+    Debes indicar un precio por m² válido.
+  </p>
+)}
+        </div>
+
+        <div>
+          <label className="label">
+            Disponibilidad <span className="required">*</span>
+          </label>
+          <select
+            value={availability}
+            onChange={(e) => onAvailabilityChange(e.target.value)}
+            className="select"
+          >
+            <option value="MONDAY_TO_FRIDAY">Lunes a viernes</option>
+            <option value="MONDAY_TO_SATURDAY">Lunes a sábado</option>
+            <option value="MONDAY_TO_SUNDAY">Lunes a domingo</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="label">
+            Tipo de presupuesto <span className="required">*</span>
+          </label>
+          <select
+            value={budgetType}
+            onChange={(e) => onBudgetTypeChange(e.target.value)}
+            className="select"
+          >
+            <option value="FREE">Presupuesto gratuito</option>
+            <option value="PAID">Presupuesto de pago</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="label">
+            Años de experiencia <span className="required">*</span>
+          </label>
+          <select
+            value={yearsExperience}
+            onChange={(e) => onYearsExperienceChange(e.target.value)}
+            className="select"
+          >
+            <option value="EXPERIENCE_0_2">0 a 2 años</option>
+            <option value="EXPERIENCE_3_5">3 a 5 años</option>
+            <option value="EXPERIENCE_6_10">6 a 10 años</option>
+            <option value="EXPERIENCE_10_20">10 a 20 años</option>
+            <option value="EXPERIENCE_20_PLUS">Más de 20 años</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type ListingLocationSectionProps = Readonly<{
+  city: string;
+  province: string;
+  postalCode: string;
+  serviceRadiusKm: string;
+  onCityChange: (value: string) => void;
+  onProvinceChange: (value: string) => void;
+  onPostalCodeChange: (value: string) => void;
+  onServiceRadiusKmChange: (value: string) => void;
+}>;
+
+function ListingLocationSection({
+  city,
+  province,
+  postalCode,
+  serviceRadiusKm,
+  onCityChange,
+  onProvinceChange,
+  onPostalCodeChange,
+  onServiceRadiusKmChange,
+}: ListingLocationSectionProps) {
+  return (
+    <div className="form-section-card">
+      <h2 className="form-section-title">Ubicación</h2>
+
+      <div className="form-section-fields">
+        <div>
+          <label className="label">
+            Ciudad <span className="required">*</span>
+          </label>
+          <input
+            type="text"
+            value={city}
+            onChange={(e) => onCityChange(e.target.value)}
+            className="input"
+          />
+
+          {city.trim().length > 0 && city.trim().length < 3 && (
+            <p className="form-helper-error">
+              La ciudad debe tener al menos 3 caracteres.
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="label">
+            Provincia <span className="required">*</span>
+          </label>
+          <select
+            value={province}
+            onChange={(e) => onProvinceChange(e.target.value)}
+            className="select"
+          >
+            {SPAIN_PROVINCES.map((provinceName) => (
+              <option key={provinceName} value={provinceName}>
+                {provinceName}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="label">
+            Código postal <span className="required">*</span>
+          </label>
+          <input
+            type="text"
+            value={postalCode}
+onChange={(e) => {
+  onPostalCodeChange(sanitizePostalCode(e.target.value));
+}}
+            maxLength={5}
+            className="input"
+          />
+
+          {postalCode.length > 0 && postalCode.length < 5 && (
+            <p className="form-helper-error">
+              El código postal debe tener 5 dígitos.
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="label">
+            Radio de trabajo (km) <span className="required">*</span>
+          </label>
+          <select
+            value={serviceRadiusKm}
+            onChange={(e) => onServiceRadiusKmChange(e.target.value)}
+            className="select"
+          >
+            <option value="1">1 km</option>
+            <option value="2">2 km</option>
+            <option value="3">3 km</option>
+            <option value="4">4 km</option>
+            <option value="5">5 km</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ListingTestPage() {
   const [displayName, setDisplayName] = useState("");
@@ -277,7 +736,7 @@ if (city.trim().length < 3) {
   setListingMessage("La ciudad debe tener al menos 3 caracteres");
   return;
 }
-if (!province || !SPAIN_PROVINCES.includes(province)) {
+if (!province || !(SPAIN_PROVINCES as readonly string[]).includes(province)) {
   setListingMessage("Debes seleccionar una provincia válida");
   return;
 }
@@ -588,6 +1047,63 @@ const listingImagesBlockProps = {
   setDragInsertPosition,
 } satisfies ListingImagesBlockProps;
 
+const professionalPhoneBlockProps = {
+  phoneMessage,
+  phoneSaved,
+  phone,
+  phoneLoading,
+  currentPhone: user?.professionalProfile?.phone,
+  onPhoneChange: setPhone,
+  onSavePhone: handleSavePhone,
+  onEditPhone: handleEditPhone,
+} satisfies ProfessionalPhoneBlockProps;
+
+const listingMessageBlockProps = {
+  listingMessage,
+} satisfies ListingMessageBlockProps;
+
+const termsCheckboxBlockProps = {
+  acceptTerms,
+  onChange: setAcceptTerms,
+} satisfies TermsCheckboxBlockProps;
+
+const listingSubmitButtonProps = {
+  loading,
+  imagesOptimizing,
+  phoneSaved,
+} satisfies ListingSubmitButtonProps;
+
+const listingBasicDataSectionProps = {
+  displayName,
+  description,
+  selectedSpecialtyId,
+  specialties,
+  onDisplayNameChange: setDisplayName,
+  onDescriptionChange: setDescription,
+  onSelectedSpecialtyIdChange: setSelectedSpecialtyId,
+} satisfies ListingBasicDataSectionProps;
+
+const listingServiceConditionsSectionProps = {
+  pricePerM2,
+  availability,
+  budgetType,
+  yearsExperience,
+  onPricePerM2Change: setPricePerM2,
+  onAvailabilityChange: setAvailability,
+  onBudgetTypeChange: setBudgetType,
+  onYearsExperienceChange: setYearsExperience,
+} satisfies ListingServiceConditionsSectionProps;
+
+const listingLocationSectionProps = {
+  city,
+  province,
+  postalCode,
+  serviceRadiusKm,
+  onCityChange: setCity,
+  onProvinceChange: setProvince,
+  onPostalCodeChange: setPostalCode,
+  onServiceRadiusKmChange: setServiceRadiusKm,
+} satisfies ListingLocationSectionProps;
 
   if (checkingUser) {
     return (
@@ -623,333 +1139,25 @@ const listingImagesBlockProps = {
       <p className="listing-page-intro">
         Profesional detectado: <strong>{user.name}</strong>
       </p>
-{phoneMessage && (
-  <p
-    className={`form-message ${
-      phoneMessage.includes("✅") ? "is-success" : "is-error"
-    }`}
-  >
-    {phoneMessage}
-  </p>
-)}
-{phoneSaved ? (
-  <div className="phone-status-card">
-  <h2 className="phone-status-title">
-    ✅ Teléfono profesional ya guardado
-  </h2>
+<ProfessionalPhoneBlock {...professionalPhoneBlockProps} />
 
-  <p className="phone-status-text">
-    No es necesario volver a añadirlo para crear anuncios.
-  </p>
-
-  <button
-    type="button"
-    onClick={handleEditPhone}
-    className="phone-status-button"
-  >
-    Cambiar teléfono
-  </button>
-</div>
-) : (
-  <div className="phone-required-card">
-  <h2 className="phone-required-title">
-    Teléfono profesional (obligatorio)
-  </h2>
-
-  <div className="phone-required-warning">
-    Debes añadir y guardar tu teléfono profesional antes de poder crear anuncios.
-  </div>
-
-<div className="form-actions-row">
-            <input
-        type="text"
-        value={phone}
-        onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-        maxLength={9}
-        placeholder="Ej: 600123456"
-        className="input form-input-grow"
-      />
-
-<button
-  type="button"
-  onClick={handleSavePhone}
-  disabled={phoneLoading || phone.length !== 9}
-  className={`phone-save-button ${
-    phoneLoading || phone.length !== 9 ? "is-disabled" : ""
-  }`}
->
-  {phoneLoading ? "Guardando..." : "Guardar"}
-</button>
-    </div>
- {phone.length > 0 && phone.length < 9 && (
-  <p className="form-helper-error">
-    El teléfono debe tener exactamente 9 dígitos.
-  </p>
-)}
-  </div>
-)}
-{listingMessage && (
-  <p
-    className={`form-message ${
-      listingMessage.includes("✅") ? "is-success" : "is-error"
-    }`}
-  >
-    {listingMessage}
-  </p>
-)}
+<ListingMessageBlock {...listingMessageBlockProps} />
 <form
   onSubmit={handleSubmit}
   className="listing-form"
-><div className="form-section-card">
-  <h2 className="form-section-title">
-    Datos del anuncio
-  </h2>
-
-  <div className="form-section-fields">
-    <div>
-  <label className="label">
-    Nombre del anuncio <span className="required">*</span>
-  </label>
-    <input
-    type="text"
-    value={displayName}
-    onChange={(e) => setDisplayName(e.target.value)}
-    className="input"
-  />
-
-  {displayName.trim().length > 0 && displayName.trim().length < 3 && (
-    <p className="form-helper-error">
-      El nombre del anuncio debe tener al menos 3 caracteres.
-    </p>
-  )}
-</div>
-
-    <div>
-  <label className="label">
-    Descripción <span className="required">*</span>
-  </label>
-  <textarea
-  value={description}
-  onChange={(e) => setDescription(e.target.value)}
-  rows={5}
-  className="textarea textarea-resize-vertical"
-/>
-
-  {description.trim().length > 0 && description.trim().length < 10 && (
-    <p className="form-helper-error">
-      La descripción debe tener al menos 10 caracteres.
-    </p>
-  )}
-</div>
-
-    <div>
-      <label className="label">
-        Especialidad <span className="required">*</span>
-      </label>
-      <select
-        value={selectedSpecialtyId}
-        onChange={(e) => setSelectedSpecialtyId(e.target.value)}
-        className="select"
-      >
-        {specialties.map((specialty) => (
-          <option key={specialty.id} value={specialty.id}>
-            {specialty.name}
-          </option>
-        ))}
-      </select>
-    </div>
-  </div>
-</div>
+><ListingBasicDataSection {...listingBasicDataSectionProps} />
 
 <ListingImagesBlock {...listingImagesBlockProps} />
 
-<div className="form-section-card">
-  <h2 className="form-section-title">
-    Condiciones del servicio
-  </h2>
-
-  <div className="form-section-fields">
-    <div>
-  <label className="label">
-    Precio por m² <span className="required">*</span>
-  </label>
-    <input
-    type="number"
-    value={pricePerM2}
-    onChange={(e) => setPricePerM2(e.target.value)}
-    min="1"
-    step="0.01"
-    className="input"
-  />
-
-  {pricePerM2 !== "" && Number(pricePerM2) <= 0 && (
-  <p className="form-helper-error">
-    Debes indicar un precio por m² válido.
-  </p>
-)}
-</div>
-
-    <div>
-      <label className="label">
-        Disponibilidad <span className="required">*</span>
-      </label>
-            <select
-        value={availability}
-        onChange={(e) => setAvailability(e.target.value)}
-        className="select"
-      >
-        <option value="MONDAY_TO_FRIDAY">Lunes a viernes</option>
-        <option value="MONDAY_TO_SATURDAY">Lunes a sábado</option>
-        <option value="MONDAY_TO_SUNDAY">Lunes a domingo</option>
-      </select>
-    </div>
-
-    <div>
-      <label className="label">
-        Tipo de presupuesto <span className="required">*</span>
-      </label>
-            <select
-        value={budgetType}
-        onChange={(e) => setBudgetType(e.target.value)}
-        className="select"
-      >
-        <option value="FREE">Presupuesto gratuito</option>
-        <option value="PAID">Presupuesto de pago</option>
-      </select>
-    </div>
-
-    <div>
-      <label className="label">
-        Años de experiencia <span className="required">*</span>
-      </label>
-            <select
-        value={yearsExperience}
-        onChange={(e) => setYearsExperience(e.target.value)}
-        className="select"
-      >
-        <option value="EXPERIENCE_0_2">0 a 2 años</option>
-        <option value="EXPERIENCE_3_5">3 a 5 años</option>
-        <option value="EXPERIENCE_6_10">6 a 10 años</option>
-        <option value="EXPERIENCE_10_20">10 a 20 años</option>
-        <option value="EXPERIENCE_20_PLUS">Más de 20 años</option>
-      </select>
-    </div>
-  </div>
-</div>
-<div className="form-section-card">
-  <h2 className="form-section-title">
-    Ubicación
-  </h2>
-
-  <div className="form-section-fields">
-    <div>
-  <label className="label">
-    Ciudad <span className="required">*</span>
-  </label>
-    <input
-    type="text"
-    value={city}
-    onChange={(e) => setCity(e.target.value)}
-    className="input"
-  />
-
-  {city.trim().length > 0 && city.trim().length < 3 && (
-    <p className="form-helper-error">
-      La ciudad debe tener al menos 3 caracteres.
-    </p>
-  )}
-</div>
-
-    <div>
-  <label className="label">
-    Provincia <span className="required">*</span>
-  </label>
-    <select
-    value={province}
-    onChange={(e) => setProvince(e.target.value)}
-    className="select"
-  >
-    {SPAIN_PROVINCES.map((provinceName) => (
-      <option key={provinceName} value={provinceName}>
-        {provinceName}
-      </option>
-    ))}
-  </select>
-</div>
-
-    <div>
-  <label className="label">
-    Código postal <span className="required">*</span>
-  </label>
-    <input
-    type="text"
-    value={postalCode}
-    onChange={(e) => {
-      const value = e.target.value.replace(/\D/g, "");
-      if (value.length <= 5) {
-        setPostalCode(value);
-      }
-    }}
-    maxLength={5}
-    className="input"
-  />
-
-  {postalCode.length > 0 && postalCode.length < 5 && (
-    <p className="form-helper-error">
-      El código postal debe tener 5 dígitos.
-    </p>
-  )}
-</div>
-    <div>
-  <label className="label">
-    Radio de trabajo (km) <span className="required">*</span>
-  </label>
-   <select
-  value={serviceRadiusKm}
-  onChange={(e) => setServiceRadiusKm(e.target.value)}
-  className="select"
->
-  <option value="1">1 km</option>
-  <option value="2">2 km</option>
-  <option value="3">3 km</option>
-  <option value="4">4 km</option>
-  <option value="5">5 km</option>
-</select>
-
-  
-</div>
-  </div>
-</div>
-<label className="form-checkbox-row">
-  <input
-    type="checkbox"
-    checked={acceptTerms}
-    onChange={(e) => setAcceptTerms(e.target.checked)}
-    className="form-checkbox-input"
-  />
-  <span>
-    Confirmo que la información del anuncio es veraz y acepto los términos
-    aplicables a la publicación.
-  </span>
-</label>
+<ListingServiceConditionsSection
+  {...listingServiceConditionsSectionProps}
+/>
+<ListingLocationSection {...listingLocationSectionProps} />
+<TermsCheckboxBlock {...termsCheckboxBlockProps} />
 
 
 
-<button
-  type="submit"
-  disabled={loading || imagesOptimizing || !phoneSaved}
-  className={`form-submit-button${
-    loading || imagesOptimizing || !phoneSaved ? " is-disabled" : ""
-  }`}
->
-{loading
-  ? "Creando..."
-  : imagesOptimizing
-  ? "Optimizando imágenes..."
-  : !phoneSaved
-  ? "Guarda tu teléfono para continuar"
-  : "Crear anuncio"}
-</button>
+<ListingSubmitButton {...listingSubmitButtonProps} />
       </form>
 
 
