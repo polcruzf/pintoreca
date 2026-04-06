@@ -3,6 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import imageCompression from "browser-image-compression";
 import ListingImagesBlock from "@/components/ListingImagesBlock";
+import ListingMessageBlock from "@/components/ListingMessageBlock";
+import ListingSubmitButton from "@/components/ListingSubmitButton";
+import TermsCheckboxBlock from "@/components/TermsCheckboxBlock";
+import ProfessionalPhoneBlock from "@/components/ProfessionalPhoneBlock";
+import ListingBasicDataSection from "@/components/ListingBasicDataSection";
+import ListingServiceConditionsSection from "@/components/ListingServiceConditionsSection";
+import ListingLocationSection from "@/components/ListingLocationSection";
 import { SPAIN_PROVINCES } from "@/constants/spain-provinces";
 import type {
   DragInsertPosition,
@@ -37,454 +44,363 @@ type Specialty = {
   name: string;
 };
 
-type ProfessionalPhoneBlockProps = Readonly<{
-  phoneMessage: string;
-  phoneSaved: boolean;
-  phone: string;
-  phoneLoading: boolean;
-  currentPhone?: string | null;
-  onPhoneChange: (value: string) => void;
-  onSavePhone: () => void;
-  onEditPhone: () => void;
-}>;
+type ListingValidationResult =
+  | Readonly<{
+      message: string;
+      touchImages?: boolean;
+    }>
+  | null;
 
-function ProfessionalPhoneBlock({
-  phoneMessage,
-  phoneSaved,
-  phone,
-  phoneLoading,
-  onPhoneChange,
-  onSavePhone,
-  onEditPhone,
-}: ProfessionalPhoneBlockProps) {
-  return (
-    <>
-      {phoneMessage && (
-        <p
-          className={`form-message ${
-            phoneMessage.includes("✅") ? "is-success" : "is-error"
-          }`}
-        >
-          {phoneMessage}
-        </p>
-      )}
-
-      {phoneSaved ? (
-        <div className="phone-status-card">
-          <h2 className="phone-status-title">
-            ✅ Teléfono profesional ya guardado
-          </h2>
-
-          <p className="phone-status-text">
-            No es necesario volver a añadirlo para crear anuncios.
-          </p>
-
-          <button
-            type="button"
-            onClick={onEditPhone}
-            className="phone-status-button"
-          >
-            Cambiar teléfono
-          </button>
-        </div>
-      ) : (
-        <div className="phone-required-card">
-          <h2 className="phone-required-title">
-            Teléfono profesional (obligatorio)
-          </h2>
-
-          <div className="phone-required-warning">
-            Debes añadir y guardar tu teléfono profesional antes de poder crear
-            anuncios.
-          </div>
-
-          <div className="form-actions-row">
-            <input
-              type="text"
-              value={phone}
-              onChange={(e) => onPhoneChange(e.target.value.replace(/\D/g, ""))}
-              maxLength={9}
-              placeholder="Ej: 600123456"
-              className="input form-input-grow"
-            />
-
-            <button
-              type="button"
-              onClick={onSavePhone}
-              disabled={phoneLoading || phone.length !== 9}
-              className={`phone-save-button ${
-                phoneLoading || phone.length !== 9 ? "is-disabled" : ""
-              }`}
-            >
-              {phoneLoading ? "Guardando..." : "Guardar"}
-            </button>
-          </div>
-
-          {phone.length > 0 && phone.length < 9 && (
-            <p className="form-helper-error">
-              El teléfono debe tener exactamente 9 dígitos.
-            </p>
-          )}
-        </div>
-      )}
-    </>
-  );
-}
-
-type ListingMessageBlockProps = Readonly<{
-  listingMessage: string;
-}>;
-
-function ListingMessageBlock({
-  listingMessage,
-}: ListingMessageBlockProps) {
-  if (!listingMessage) return null;
-
-  return (
-    <p
-      className={`form-message ${
-        listingMessage.includes("✅") ? "is-success" : "is-error"
-      }`}
-    >
-      {listingMessage}
-    </p>
-  );
-}
-
-type TermsCheckboxBlockProps = Readonly<{
-  acceptTerms: boolean;
-  onChange: (value: boolean) => void;
-}>;
-
-function TermsCheckboxBlock({
-  acceptTerms,
-  onChange,
-}: TermsCheckboxBlockProps) {
-  return (
-    <label className="form-checkbox-row">
-      <input
-        type="checkbox"
-        checked={acceptTerms}
-        onChange={(e) => onChange(e.target.checked)}
-        className="form-checkbox-input"
-      />
-      <span>
-        Confirmo que la información del anuncio es veraz y acepto los términos
-        aplicables a la publicación.
-      </span>
-    </label>
-  );
-}
-
-type ListingSubmitButtonProps = Readonly<{
-  loading: boolean;
-  imagesOptimizing: boolean;
-  phoneSaved: boolean;
-}>;
-
-function ListingSubmitButton({
-  loading,
-  imagesOptimizing,
-  phoneSaved,
-}: ListingSubmitButtonProps) {
-  return (
-    <button
-      type="submit"
-      disabled={loading || imagesOptimizing || !phoneSaved}
-      className={`form-submit-button${
-        loading || imagesOptimizing || !phoneSaved ? " is-disabled" : ""
-      }`}
-    >
-      {loading
-        ? "Creando..."
-        : imagesOptimizing
-        ? "Optimizando imágenes..."
-        : !phoneSaved
-        ? "Guarda tu teléfono para continuar"
-        : "Crear anuncio"}
-    </button>
-  );
-}
-
-type ListingBasicDataSectionProps = Readonly<{
+type ListingValidationInput = Readonly<{
   displayName: string;
   description: string;
-  selectedSpecialtyId: string;
-  specialties: Specialty[];
-  onDisplayNameChange: (value: string) => void;
-  onDescriptionChange: (value: string) => void;
-  onSelectedSpecialtyIdChange: (value: string) => void;
-}>;
-
-function ListingBasicDataSection({
-  displayName,
-  description,
-  selectedSpecialtyId,
-  specialties,
-  onDisplayNameChange,
-  onDescriptionChange,
-  onSelectedSpecialtyIdChange,
-}: ListingBasicDataSectionProps) {
-  return (
-    <div className="form-section-card">
-      <h2 className="form-section-title">Datos del anuncio</h2>
-
-      <div className="form-section-fields">
-        <div>
-          <label className="label">
-            Nombre del anuncio <span className="required">*</span>
-          </label>
-          <input
-            type="text"
-            value={displayName}
-            onChange={(e) => onDisplayNameChange(e.target.value)}
-            className="input"
-          />
-
-          {displayName.trim().length > 0 && displayName.trim().length < 3 && (
-            <p className="form-helper-error">
-              El nombre del anuncio debe tener al menos 3 caracteres.
-            </p>
-          )}
-        </div>
-
-        <div>
-          <label className="label">
-            Descripción <span className="required">*</span>
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => onDescriptionChange(e.target.value)}
-            rows={5}
-            className="textarea textarea-resize-vertical"
-          />
-
-          {description.trim().length > 0 &&
-            description.trim().length < 10 && (
-              <p className="form-helper-error">
-                La descripción debe tener al menos 10 caracteres.
-              </p>
-            )}
-        </div>
-
-        <div>
-          <label className="label">
-            Especialidad <span className="required">*</span>
-          </label>
-          <select
-            value={selectedSpecialtyId}
-            onChange={(e) => onSelectedSpecialtyIdChange(e.target.value)}
-            className="select"
-          >
-            {specialties.map((specialty) => (
-              <option key={specialty.id} value={specialty.id}>
-                {specialty.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type ListingServiceConditionsSectionProps = Readonly<{
-  pricePerM2: string;
-  availability: string;
-  budgetType: string;
-  yearsExperience: string;
-  onPricePerM2Change: (value: string) => void;
-  onAvailabilityChange: (value: string) => void;
-  onBudgetTypeChange: (value: string) => void;
-  onYearsExperienceChange: (value: string) => void;
-}>;
-
-function ListingServiceConditionsSection({
-  pricePerM2,
-  availability,
-  budgetType,
-  yearsExperience,
-  onPricePerM2Change,
-  onAvailabilityChange,
-  onBudgetTypeChange,
-  onYearsExperienceChange,
-}: ListingServiceConditionsSectionProps) {
-  return (
-    <div className="form-section-card">
-      <h2 className="form-section-title">Condiciones del servicio</h2>
-
-      <div className="form-section-fields">
-        <div>
-          <label className="label">
-            Precio por m² <span className="required">*</span>
-          </label>
-          <input
-            type="number"
-            value={pricePerM2}
-            onChange={(e) => onPricePerM2Change(e.target.value)}
-            min="1"
-            step="0.01"
-            className="input"
-          />
-
-{isInvalidPrice(pricePerM2) && (
-  <p className="form-helper-error">
-    Debes indicar un precio por m² válido.
-  </p>
-)}
-        </div>
-
-        <div>
-          <label className="label">
-            Disponibilidad <span className="required">*</span>
-          </label>
-          <select
-            value={availability}
-            onChange={(e) => onAvailabilityChange(e.target.value)}
-            className="select"
-          >
-            <option value="MONDAY_TO_FRIDAY">Lunes a viernes</option>
-            <option value="MONDAY_TO_SATURDAY">Lunes a sábado</option>
-            <option value="MONDAY_TO_SUNDAY">Lunes a domingo</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="label">
-            Tipo de presupuesto <span className="required">*</span>
-          </label>
-          <select
-            value={budgetType}
-            onChange={(e) => onBudgetTypeChange(e.target.value)}
-            className="select"
-          >
-            <option value="FREE">Presupuesto gratuito</option>
-            <option value="PAID">Presupuesto de pago</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="label">
-            Años de experiencia <span className="required">*</span>
-          </label>
-          <select
-            value={yearsExperience}
-            onChange={(e) => onYearsExperienceChange(e.target.value)}
-            className="select"
-          >
-            <option value="EXPERIENCE_0_2">0 a 2 años</option>
-            <option value="EXPERIENCE_3_5">3 a 5 años</option>
-            <option value="EXPERIENCE_6_10">6 a 10 años</option>
-            <option value="EXPERIENCE_10_20">10 a 20 años</option>
-            <option value="EXPERIENCE_20_PLUS">Más de 20 años</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type ListingLocationSectionProps = Readonly<{
   city: string;
   province: string;
   postalCode: string;
   serviceRadiusKm: string;
-  onCityChange: (value: string) => void;
-  onProvinceChange: (value: string) => void;
-  onPostalCodeChange: (value: string) => void;
-  onServiceRadiusKmChange: (value: string) => void;
+  selectedSpecialtyId: string;
+  pricePerM2: string;
+  imagesCount: number;
+  acceptTerms: boolean;
 }>;
 
-function ListingLocationSection({
+type ResetListingFormParams = Readonly<{
+  setDisplayName: (value: string) => void;
+  setDescription: (value: string) => void;
+  setCity: (value: string) => void;
+  setProvince: (value: string) => void;
+  setPostalCode: (value: string) => void;
+  setServiceRadiusKm: (value: string) => void;
+  setAcceptTerms: (value: boolean) => void;
+  setPricePerM2: (value: string) => void;
+  setAvailability: (value: string) => void;
+  setBudgetType: (value: string) => void;
+  setYearsExperience: (value: string) => void;
+  setImages: (value: File[]) => void;
+  setImagePreviews: (value: string[]) => void;
+  setImagesTouched: (value: boolean) => void;
+  setMainImageIndex: (value: number) => void;
+  setSelectedSpecialtyId: (value: string) => void;
+  specialties: Specialty[];
+}>;
+
+type CreateListingFormDataParams = Readonly<{
+  displayName: string;
+  description: string;
+  yearsExperience: string;
+  availability: string;
+  budgetType: string;
+  postalCode: string;
+  city: string;
+  province: string;
+  serviceRadiusKm: string;
+  mainImageIndex: number;
+  selectedSpecialtyId: string;
+  pricePerM2: string;
+  images: File[];
+}>;
+
+type ListingBackendErrorData = Readonly<{
+  error?: string;
+  message?: string;
+}>;
+
+type HandleListingBackendErrorParams = Readonly<{
+  data: ListingBackendErrorData;
+  setListingMessage: (value: string) => void;
+  setPhoneSaved: (value: boolean) => void;
+  setLoading: (value: boolean) => void;
+}>;
+
+type HandleListingSuccessParams = Readonly<{
+  setListingMessage: (value: string) => void;
+  resetForm: () => void;
+  setLoading: (value: boolean) => void;
+}>;
+
+type HandleListingConnectionErrorParams = Readonly<{
+  setListingMessage: (value: string) => void;
+  setLoading: (value: boolean) => void;
+}>;
+
+type PhoneValidationResult = string | null;
+type HandlePhoneSaveSuccessParams = Readonly<{
+  phone: string;
+  setPhoneMessage: (value: string) => void;
+  setPhoneSaved: (value: boolean) => void;
+  setUser: React.Dispatch<React.SetStateAction<UserData | null>>;
+  setPhoneLoading: (value: boolean) => void;
+}>;
+
+type HandlePhoneSaveBackendErrorParams = Readonly<{
+  errorMessage?: string;
+  setPhoneMessage: (value: string) => void;
+  setPhoneLoading: (value: boolean) => void;
+}>;
+
+function handlePhoneSaveBackendError({
+  errorMessage,
+  setPhoneMessage,
+  setPhoneLoading,
+}: HandlePhoneSaveBackendErrorParams): void {
+  setPhoneMessage(errorMessage || "Error al guardar el teléfono");
+  setPhoneLoading(false);
+}
+
+function handlePhoneSaveSuccess({
+  phone,
+  setPhoneMessage,
+  setPhoneSaved,
+  setUser,
+  setPhoneLoading,
+}: HandlePhoneSaveSuccessParams): void {
+  setPhoneMessage("✅ Teléfono guardado correctamente");
+  setPhoneSaved(true);
+
+  setUser((prev) => {
+    if (!prev || !prev.professionalProfile) {
+      return prev;
+    }
+
+    return {
+      ...prev,
+      professionalProfile: {
+        ...prev.professionalProfile,
+        phone,
+      },
+    };
+  });
+
+  setPhoneLoading(false);
+}
+
+function validateProfessionalPhone(phone: string): PhoneValidationResult {
+  if (!phone.trim()) {
+    return "El teléfono es obligatorio";
+  }
+
+  if (!/^\d{9}$/.test(phone)) {
+    return "El teléfono debe tener 9 dígitos";
+  }
+
+  return null;
+}
+
+function handleListingConnectionError({
+  setListingMessage,
+  setLoading,
+}: HandleListingConnectionErrorParams): void {
+  setListingMessage("Error de conexión");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  setLoading(false);
+}
+
+function handleListingSuccess({
+  setListingMessage,
+  resetForm,
+  setLoading,
+}: HandleListingSuccessParams): void {
+  setListingMessage("✅ Anuncio creado correctamente");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  resetForm();
+  setLoading(false);
+}
+
+function handleListingBackendError({
+  data,
+  setListingMessage,
+  setPhoneSaved,
+  setLoading,
+}: HandleListingBackendErrorParams): void {
+  console.error("Error backend:", data);
+
+  setListingMessage(
+    data.error ||
+      data.message ||
+      JSON.stringify(data) ||
+      "Error al crear el anuncio"
+  );
+
+  if (
+    (data.error || "").includes("teléfono profesional antes de crear un anuncio")
+  ) {
+    setPhoneSaved(false);
+  }
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  setLoading(false);
+}
+
+function createListingFormData({
+  displayName,
+  description,
+  yearsExperience,
+  availability,
+  budgetType,
+  postalCode,
+  city,
+  province,
+  serviceRadiusKm,
+  mainImageIndex,
+  selectedSpecialtyId,
+  pricePerM2,
+  images,
+}: CreateListingFormDataParams): FormData {
+  const formData = new FormData();
+
+  formData.append("displayName", displayName);
+  formData.append("description", description);
+  formData.append("yearsExperience", yearsExperience);
+  formData.append("availability", availability);
+  formData.append("budgetType", budgetType);
+  formData.append("postalCode", postalCode);
+  formData.append("city", city);
+  formData.append("citySlug", city.toLowerCase().trim().replace(/\s+/g, "-"));
+  formData.append("province", province);
+  formData.append(
+    "provinceSlug",
+    province.toLowerCase().trim().replace(/\s+/g, "-")
+  );
+  formData.append("latitude", "41.3851");
+  formData.append("longitude", "2.1734");
+  formData.append("serviceRadiusKm", serviceRadiusKm);
+  formData.append("mainImageIndex", String(mainImageIndex));
+
+  formData.append(
+    "specialties",
+    JSON.stringify([
+      {
+        specialtyId: selectedSpecialtyId,
+        pricePerM2: Number(pricePerM2),
+      },
+    ])
+  );
+
+  images.forEach((image) => {
+    formData.append("images", image);
+  });
+
+  return formData;
+}
+
+function resetListingFormAfterSuccess({
+  setDisplayName,
+  setDescription,
+  setCity,
+  setProvince,
+  setPostalCode,
+  setServiceRadiusKm,
+  setAcceptTerms,
+  setPricePerM2,
+  setAvailability,
+  setBudgetType,
+  setYearsExperience,
+  setImages,
+  setImagePreviews,
+  setImagesTouched,
+  setMainImageIndex,
+  setSelectedSpecialtyId,
+  specialties,
+}: ResetListingFormParams): void {
+  setDisplayName("");
+  setDescription("");
+  setCity("");
+  setProvince("Barcelona");
+  setPostalCode("");
+  setServiceRadiusKm("5");
+  setAcceptTerms(false);
+  setPricePerM2("");
+  setAvailability("MONDAY_TO_FRIDAY");
+  setBudgetType("FREE");
+  setYearsExperience("EXPERIENCE_10_20");
+  setImages([]);
+  setImagePreviews([]);
+  setImagesTouched(false);
+  setMainImageIndex(0);
+
+  if (specialties.length > 0) {
+    setSelectedSpecialtyId(specialties[0].id);
+  }
+}
+
+function validateListingForm({
+  displayName,
+  description,
   city,
   province,
   postalCode,
   serviceRadiusKm,
-  onCityChange,
-  onProvinceChange,
-  onPostalCodeChange,
-  onServiceRadiusKmChange,
-}: ListingLocationSectionProps) {
-  return (
-    <div className="form-section-card">
-      <h2 className="form-section-title">Ubicación</h2>
+  selectedSpecialtyId,
+  pricePerM2,
+  imagesCount,
+  acceptTerms,
+}: ListingValidationInput): ListingValidationResult {
+  if (!displayName.trim()) {
+    return { message: "El nombre del anuncio es obligatorio" };
+  }
 
-      <div className="form-section-fields">
-        <div>
-          <label className="label">
-            Ciudad <span className="required">*</span>
-          </label>
-          <input
-            type="text"
-            value={city}
-            onChange={(e) => onCityChange(e.target.value)}
-            className="input"
-          />
+  if (displayName.trim().length < 3) {
+    return {
+      message: "El nombre del anuncio debe tener al menos 3 caracteres",
+    };
+  }
 
-          {city.trim().length > 0 && city.trim().length < 3 && (
-            <p className="form-helper-error">
-              La ciudad debe tener al menos 3 caracteres.
-            </p>
-          )}
-        </div>
+  if (!description.trim()) {
+    return { message: "La descripción es obligatoria" };
+  }
 
-        <div>
-          <label className="label">
-            Provincia <span className="required">*</span>
-          </label>
-          <select
-            value={province}
-            onChange={(e) => onProvinceChange(e.target.value)}
-            className="select"
-          >
-            {SPAIN_PROVINCES.map((provinceName) => (
-              <option key={provinceName} value={provinceName}>
-                {provinceName}
-              </option>
-            ))}
-          </select>
-        </div>
+  if (description.trim().length < 10) {
+    return {
+      message: "La descripción debe tener al menos 10 caracteres",
+    };
+  }
 
-        <div>
-          <label className="label">
-            Código postal <span className="required">*</span>
-          </label>
-          <input
-            type="text"
-            value={postalCode}
-onChange={(e) => {
-  onPostalCodeChange(sanitizePostalCode(e.target.value));
-}}
-            maxLength={5}
-            className="input"
-          />
+  if (!city.trim()) {
+    return { message: "La ciudad es obligatoria" };
+  }
 
-          {postalCode.length > 0 && postalCode.length < 5 && (
-            <p className="form-helper-error">
-              El código postal debe tener 5 dígitos.
-            </p>
-          )}
-        </div>
+  if (city.trim().length < 3) {
+    return {
+      message: "La ciudad debe tener al menos 3 caracteres",
+    };
+  }
 
-        <div>
-          <label className="label">
-            Radio de trabajo (km) <span className="required">*</span>
-          </label>
-          <select
-            value={serviceRadiusKm}
-            onChange={(e) => onServiceRadiusKmChange(e.target.value)}
-            className="select"
-          >
-            <option value="1">1 km</option>
-            <option value="2">2 km</option>
-            <option value="3">3 km</option>
-            <option value="4">4 km</option>
-            <option value="5">5 km</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  );
+  if (!province || !(SPAIN_PROVINCES as readonly string[]).includes(province)) {
+    return { message: "Debes seleccionar una provincia válida" };
+  }
+
+  if (!postalCode.trim()) {
+    return { message: "El código postal es obligatorio" };
+  }
+
+  if (!/^\d{5}$/.test(postalCode)) {
+    return { message: "El código postal debe tener 5 dígitos" };
+  }
+
+  if (!serviceRadiusKm || Number(serviceRadiusKm) <= 0) {
+    return { message: "Debes indicar un radio de trabajo válido" };
+  }
+
+  if (!selectedSpecialtyId) {
+    return { message: "Debes seleccionar una especialidad" };
+  }
+
+  if (!pricePerM2 || Number(pricePerM2) <= 0) {
+    return { message: "Debes indicar un precio por m² válido" };
+  }
+
+  if (imagesCount === 0) {
+    return {
+      message: "Debes añadir al menos 1 imagen para crear el anuncio",
+      touchImages: true,
+    };
+  }
+
+  if (!acceptTerms) {
+    return { message: "Debes aceptar los términos para continuar" };
+  }
+
+  return null;
 }
 
 export default function ListingTestPage() {
@@ -707,110 +623,47 @@ if (userData.user?.professionalProfile?.phone) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!displayName.trim()) {
-  setListingMessage("El nombre del anuncio es obligatorio");
-  return;
-}
+    const validationResult = validateListingForm({
+      displayName,
+      description,
+      city,
+      province,
+      postalCode,
+      serviceRadiusKm,
+      selectedSpecialtyId,
+      pricePerM2,
+      imagesCount: images.length,
+      acceptTerms,
+    });
 
-if (displayName.trim().length < 3) {
-  setListingMessage("El nombre del anuncio debe tener al menos 3 caracteres");
-  return;
-}
+    if (validationResult) {
+      if (validationResult.touchImages) {
+        setImagesTouched(true);
+      }
 
-if (!description.trim()) {
-  setListingMessage("La descripción es obligatoria");
-  return;
-}
-
-if (description.trim().length < 10) {
-  setListingMessage("La descripción debe tener al menos 10 caracteres");
-  return;
-}
-
-if (!city.trim()) {
-  setListingMessage("La ciudad es obligatoria");
-  return;
-}
-
-if (city.trim().length < 3) {
-  setListingMessage("La ciudad debe tener al menos 3 caracteres");
-  return;
-}
-if (!province || !(SPAIN_PROVINCES as readonly string[]).includes(province)) {
-  setListingMessage("Debes seleccionar una provincia válida");
-  return;
-}
-
-if (!postalCode.trim()) {
-  setListingMessage("El código postal es obligatorio");
-  return;
-}
-
-if (!/^\d{5}$/.test(postalCode)) {
-  setListingMessage("El código postal debe tener 5 dígitos");
-  return;
-}
-
-if (!serviceRadiusKm || Number(serviceRadiusKm) <= 0) {
-  setListingMessage("Debes indicar un radio de trabajo válido");
-  return;
-}
-
-if (!selectedSpecialtyId) {
-  setListingMessage("Debes seleccionar una especialidad");
-  return;
-}
-
-if (!pricePerM2 || Number(pricePerM2) <= 0) {
-  setListingMessage("Debes indicar un precio por m² válido");
-  return;
-}
-
-if (images.length === 0) {
-  setImagesTouched(true);
-  setListingMessage("Debes añadir al menos 1 imagen para crear el anuncio");
-  return;
-}
-
-if (!acceptTerms) {
-  setListingMessage("Debes aceptar los términos para continuar");
-  return;
-}
+      setListingMessage(validationResult.message);
+      return;
+    }
 
 setLoading(true);
 setListingMessage("");
 setPhoneMessage("");
 
     try {
-const formData = new FormData();
-
-formData.append("displayName", displayName);
-formData.append("description", description);
-formData.append("yearsExperience", yearsExperience);
-formData.append("availability", availability);
-formData.append("budgetType", budgetType);
-formData.append("postalCode", postalCode);
-formData.append("city", city);
-formData.append("citySlug", city.toLowerCase().trim().replace(/\s+/g, "-"));
-formData.append("province", province);
-formData.append("provinceSlug", province.toLowerCase().trim().replace(/\s+/g, "-"));
-formData.append("latitude", "41.3851");
-formData.append("longitude", "2.1734");
-formData.append("serviceRadiusKm", serviceRadiusKm);
-formData.append("mainImageIndex", String(mainImageIndex));
-
-formData.append(
-  "specialties",
-  JSON.stringify([
-    {
-      specialtyId: selectedSpecialtyId,
-      pricePerM2: Number(pricePerM2),
-    },
-  ])
-);
-
-images.forEach((image) => {
-  formData.append("images", image);
+const formData = createListingFormData({
+  displayName,
+  description,
+  yearsExperience,
+  availability,
+  budgetType,
+  postalCode,
+  city,
+  province,
+  serviceRadiusKm,
+  mainImageIndex,
+  selectedSpecialtyId,
+  pricePerM2,
+  images,
 });
 
 const response = await fetch("/api/listings/create", {
@@ -821,65 +674,51 @@ const response = await fetch("/api/listings/create", {
       const data = await response.json();
 
       if (!response.ok) {
-  console.error("Error backend:", data);
+        handleListingBackendError({
+          data,
+          setListingMessage,
+          setPhoneSaved,
+          setLoading,
+        });
+        return;
+      }
 
-  setListingMessage(
-    data.error ||
-    data.message ||
-    JSON.stringify(data) ||
-    "Error al crear el anuncio"
-  );
-
-  if (
-  (data.error || "").includes("teléfono profesional antes de crear un anuncio")
-) {
-  setPhoneSaved(false);
-}
-
-  window.scrollTo({ top: 0, behavior: "smooth" });
-
-  setLoading(false);
-  return;
-}
-
-setListingMessage("✅ Anuncio creado correctamente");
-window.scrollTo({ top: 0, behavior: "smooth" });
-
-setDisplayName("");
-setDescription("");
-setCity("");
-setProvince("Barcelona");
-setPostalCode("");
-setServiceRadiusKm("5");
-setAcceptTerms(false);
-setPricePerM2("");
-setAvailability("MONDAY_TO_FRIDAY");
-setBudgetType("FREE");
-setYearsExperience("EXPERIENCE_10_20");
-setImages([]);
-setImagePreviews([]);
-setImagesTouched(false);
-setMainImageIndex(0);
-
-if (specialties.length > 0) {
-  setSelectedSpecialtyId(specialties[0].id);
-}
-
-setLoading(false);
+handleListingSuccess({
+  setListingMessage,
+  resetForm: () =>
+    resetListingFormAfterSuccess({
+      setDisplayName,
+      setDescription,
+      setCity,
+      setProvince,
+      setPostalCode,
+      setServiceRadiusKm,
+      setAcceptTerms,
+      setPricePerM2,
+      setAvailability,
+      setBudgetType,
+      setYearsExperience,
+      setImages,
+      setImagePreviews,
+      setImagesTouched,
+      setMainImageIndex,
+      setSelectedSpecialtyId,
+      specialties,
+    }),
+  setLoading,
+});
     } catch (error) {
-      setListingMessage("Error de conexión");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      setLoading(false);
+      handleListingConnectionError({
+        setListingMessage,
+        setLoading,
+      });
     }
   };
   const handleSavePhone = async () => {
-  if (!phone.trim()) {
-    setPhoneMessage("El teléfono es obligatorio");
-    return;
-  }
+  const phoneValidationMessage = validateProfessionalPhone(phone);
 
-  if (!/^\d{9}$/.test(phone)) {
-    setPhoneMessage("El teléfono debe tener 9 dígitos");
+  if (phoneValidationMessage) {
+    setPhoneMessage(phoneValidationMessage);
     return;
   }
 
@@ -899,29 +738,21 @@ setListingMessage("");
     const data = await res.json();
 
     if (!res.ok) {
-      setPhoneMessage(data.error || "Error al guardar el teléfono");
-      setPhoneLoading(false);
+      handlePhoneSaveBackendError({
+        errorMessage: data.error,
+        setPhoneMessage,
+        setPhoneLoading,
+      });
       return;
     }
 
-    setPhoneMessage("✅ Teléfono guardado correctamente");
-    setPhoneSaved(true);
-
-    setUser((prev) => {
-      if (!prev || !prev.professionalProfile) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        professionalProfile: {
-          ...prev.professionalProfile,
-          phone,
-        },
-      };
+    handlePhoneSaveSuccess({
+      phone,
+      setPhoneMessage,
+      setPhoneSaved,
+      setUser,
+      setPhoneLoading,
     });
-
-    setPhoneLoading(false);
   } catch (error) {
     setPhoneMessage("Error de conexión");
     setPhoneLoading(false);
@@ -1056,22 +887,22 @@ const professionalPhoneBlockProps = {
   onPhoneChange: setPhone,
   onSavePhone: handleSavePhone,
   onEditPhone: handleEditPhone,
-} satisfies ProfessionalPhoneBlockProps;
+};
 
 const listingMessageBlockProps = {
   listingMessage,
-} satisfies ListingMessageBlockProps;
+};
 
 const termsCheckboxBlockProps = {
   acceptTerms,
-  onChange: setAcceptTerms,
-} satisfies TermsCheckboxBlockProps;
+  setAcceptTerms,
+};
 
 const listingSubmitButtonProps = {
   loading,
   imagesOptimizing,
   phoneSaved,
-} satisfies ListingSubmitButtonProps;
+};
 
 const listingBasicDataSectionProps = {
   displayName,
@@ -1081,7 +912,7 @@ const listingBasicDataSectionProps = {
   onDisplayNameChange: setDisplayName,
   onDescriptionChange: setDescription,
   onSelectedSpecialtyIdChange: setSelectedSpecialtyId,
-} satisfies ListingBasicDataSectionProps;
+};
 
 const listingServiceConditionsSectionProps = {
   pricePerM2,
@@ -1092,7 +923,7 @@ const listingServiceConditionsSectionProps = {
   onAvailabilityChange: setAvailability,
   onBudgetTypeChange: setBudgetType,
   onYearsExperienceChange: setYearsExperience,
-} satisfies ListingServiceConditionsSectionProps;
+};
 
 const listingLocationSectionProps = {
   city,
@@ -1103,7 +934,7 @@ const listingLocationSectionProps = {
   onProvinceChange: setProvince,
   onPostalCodeChange: setPostalCode,
   onServiceRadiusKmChange: setServiceRadiusKm,
-} satisfies ListingLocationSectionProps;
+};
 
   if (checkingUser) {
     return (
