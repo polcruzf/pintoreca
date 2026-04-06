@@ -2,6 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import imageCompression from "browser-image-compression";
+import ListingImagesBlock from "@/components/ListingImagesBlock";
+import { SPAIN_PROVINCES } from "@/constants/spain-provinces";
+import type {
+  DragInsertPosition,
+  ImageMessageType,
+  ListingImagesBlockProps,
+} from "@/types/listing-images";
 
 type UserData = {
   id: string;
@@ -19,60 +26,7 @@ type Specialty = {
   id: string;
   name: string;
 };
-const SPAIN_PROVINCES = [
-  "Álava",
-  "Albacete",
-  "Alicante",
-  "Almería",
-  "Asturias",
-  "Ávila",
-  "Badajoz",
-  "Barcelona",
-  "Burgos",
-  "Cáceres",
-  "Cádiz",
-  "Cantabria",
-  "Castellón",
-  "Ciudad Real",
-  "Córdoba",
-  "Cuenca",
-  "Girona",
-  "Granada",
-  "Guadalajara",
-  "Gipuzkoa",
-  "Huelva",
-  "Huesca",
-  "Illes Balears",
-  "Jaén",
-  "A Coruña",
-  "La Rioja",
-  "Las Palmas",
-  "León",
-  "Lleida",
-  "Lugo",
-  "Madrid",
-  "Málaga",
-  "Murcia",
-  "Navarra",
-  "Ourense",
-  "Palencia",
-  "Pontevedra",
-  "Salamanca",
-  "Santa Cruz de Tenerife",
-  "Segovia",
-  "Sevilla",
-  "Soria",
-  "Tarragona",
-  "Teruel",
-  "Toledo",
-  "Valencia",
-  "Valladolid",
-  "Bizkaia",
-  "Zamora",
-  "Zaragoza",
-  "Ceuta",
-  "Melilla",
-];
+
 
 export default function ListingTestPage() {
   const [displayName, setDisplayName] = useState("");
@@ -93,7 +47,7 @@ const [phoneMessage, setPhoneMessage] = useState("");
 // Mensajes anuncio
 const [listingMessage, setListingMessage] = useState("");
 const [imageMessages, setImageMessages] = useState<string[]>([]);
-const [imageMessageType, setImageMessageType] = useState<"info" | "error">("info");
+const [imageMessageType, setImageMessageType] = useState<ImageMessageType>("info");
 const [loading, setLoading] = useState(false);
 const [phoneLoading, setPhoneLoading] = useState(false);
 const [imagesOptimizing, setImagesOptimizing] = useState(false);
@@ -108,7 +62,7 @@ const [imagesTouched, setImagesTouched] = useState(false);
 const [mainImageIndex, setMainImageIndex] = useState(0);
 const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
 const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-const [dragInsertPosition, setDragInsertPosition] = useState<"before" | "after" | null>(null);
+const [dragInsertPosition, setDragInsertPosition] = useState<DragInsertPosition>(null);
 const draggedImageIndexRef = useRef<number | null>(null);
 const transparentDragImageRef = useRef<HTMLImageElement | null>(null);
 
@@ -533,6 +487,7 @@ const getFinalDropIndex = (fromIndex: number, toIndex: number) => {
   return finalToIndex;
 };
 
+
 const moveImage = (fromIndex: number, toIndex: number) => {
   if (fromIndex < 0 || toIndex < 0) return fromIndex;
   if (fromIndex >= images.length || toIndex > images.length) return fromIndex;
@@ -566,9 +521,7 @@ const moveImage = (fromIndex: number, toIndex: number) => {
 
   return finalToIndex;
 };
-const preventButtonDrag = (e: React.MouseEvent<HTMLButtonElement>) => {
-  e.stopPropagation();
-};
+
 const removeImage = (indexToRemove: number) => {
   setImages((prev) => {
     const updated = prev.filter((_, i) => i !== indexToRemove);
@@ -609,10 +562,36 @@ const resetDragState = () => {
   setDragOverIndex(null);
   setDragInsertPosition(null);
 };
+const listingImagesBlockProps = {
+  images,
+  imagePreviews,
+  imagesTouched,
+  imageMessages,
+  imageMessageType,
+  imagesOptimizing,
+  mainImageIndex,
+  draggedImageIndex,
+  dragOverIndex,
+  dragInsertPosition,
+  draggedImageIndexRef,
+  transparentDragImageRef,
+  processIncomingImages,
+  getFinalDropIndex,
+  moveImage,
+  moveImageLeft,
+  moveImageRight,
+  removeImage,
+  setAsMainImage,
+  resetDragState,
+  setDraggedImageIndex,
+  setDragOverIndex,
+  setDragInsertPosition,
+} satisfies ListingImagesBlockProps;
+
 
   if (checkingUser) {
     return (
-      <main style={{ padding: "40px", maxWidth: "600px" }}>
+      <main className="listing-page">
         <h1>Crear anuncio (test)</h1>
         <p>Comprobando usuario...</p>
       </main>
@@ -621,7 +600,7 @@ const resetDragState = () => {
 
     if (!user) {
     return (
-      <main style={{ padding: "40px", maxWidth: "600px" }}>
+      <main className="listing-page">
         <h1>Crear anuncio (test)</h1>
         <p>{listingMessage || "No se pudo cargar el usuario"}</p>
       </main>
@@ -630,7 +609,7 @@ const resetDragState = () => {
 
   if (user.role !== "PROFESSIONAL") {
     return (
-      <main style={{ padding: "40px", maxWidth: "600px" }}>
+      <main className="listing-page">
         <h1>Crear anuncio (test)</h1>
         <p>Solo las cuentas profesionales pueden acceder a esta página.</p>
       </main>
@@ -638,122 +617,66 @@ const resetDragState = () => {
   }
 
   return (
-    <main style={{ padding: "40px", maxWidth: "600px" }}>
+    <main className="listing-page">
       <h1>Crear anuncio (test)</h1>
 
-      <p style={{ marginTop: "12px" }}>
+      <p className="listing-page-intro">
         Profesional detectado: <strong>{user.name}</strong>
       </p>
-     {phoneMessage && (
+{phoneMessage && (
   <p
-    style={{
-      marginTop: "20px",
-      padding: "12px",
-      borderRadius: "8px",
-      backgroundColor: phoneMessage.includes("✅") ? "#e6f9ec" : "#fdecea",
-      color: phoneMessage.includes("✅") ? "#1e7e34" : "#b02a37",
-      border: phoneMessage.includes("✅")
-        ? "1px solid #b7ebc6"
-        : "1px solid #f5c2c7",
-    }}
+    className={`form-message ${
+      phoneMessage.includes("✅") ? "is-success" : "is-error"
+    }`}
   >
     {phoneMessage}
   </p>
-)} 
+)}
 {phoneSaved ? (
-  <div
-    style={{
-      border: "1px solid #b7ebc6",
-      borderRadius: "12px",
-      padding: "20px",
-      backgroundColor: "#e6f9ec",
-      marginTop: "20px",
-    }}
+  <div className="phone-status-card">
+  <h2 className="phone-status-title">
+    ✅ Teléfono profesional ya guardado
+  </h2>
+
+  <p className="phone-status-text">
+    No es necesario volver a añadirlo para crear anuncios.
+  </p>
+
+  <button
+    type="button"
+    onClick={handleEditPhone}
+    className="phone-status-button"
   >
-    <h2
-      style={{
-        marginTop: 0,
-        marginBottom: "8px",
-        fontSize: "16px",
-        color: "#1e7e34",
-      }}
-    >
-      ✅ Teléfono profesional ya guardado
-    </h2>
-
-    <p style={{ margin: 0, fontSize: "14px", color: "#1e7e34" }}>
-      No es necesario volver a añadirlo para crear anuncios.
-    </p>
-
-    <button
-      type="button"
-      onClick={handleEditPhone}
-      style={{
-        marginTop: "12px",
-        padding: "10px 14px",
-        border: "1px solid #1e7e34",
-        borderRadius: "8px",
-        backgroundColor: "#fff",
-        color: "#1e7e34",
-        cursor: "pointer",
-      }}
-    >
-      Cambiar teléfono
-    </button>
-  </div>
-) : (
-  <div
-    style={{
-      border: "1px solid #ddd",
-      borderRadius: "12px",
-      padding: "20px",
-      backgroundColor: "#fff8e1",
-      marginTop: "20px",
-    }}
-  >
-    <h2 style={{ marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-      Teléfono profesional (obligatorio)
-    </h2>
-
-    <div
-  style={{
-    fontSize: "14px",
-    marginBottom: "12px",
-    padding: "12px",
-    borderRadius: "8px",
-    backgroundColor: "#fff3cd",
-    border: "1px solid #ffe69c",
-    color: "#856404",
-    lineHeight: 1.4,
-  }}
->
-  Debes añadir y guardar tu teléfono profesional antes de poder crear anuncios.
+    Cambiar teléfono
+  </button>
 </div>
+) : (
+  <div className="phone-required-card">
+  <h2 className="phone-required-title">
+    Teléfono profesional (obligatorio)
+  </h2>
 
-    <div style={{ display: "flex", gap: "10px" }}>
+  <div className="phone-required-warning">
+    Debes añadir y guardar tu teléfono profesional antes de poder crear anuncios.
+  </div>
+
+<div className="form-actions-row">
             <input
         type="text"
         value={phone}
         onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
         maxLength={9}
         placeholder="Ej: 600123456"
-        className="input"
-        style={{ flex: 1 }}
+        className="input form-input-grow"
       />
 
-      <button
+<button
   type="button"
   onClick={handleSavePhone}
   disabled={phoneLoading || phone.length !== 9}
-  style={{
-    padding: "12px 16px",
-    border: "1px solid #111",
-    borderRadius: "8px",
-    backgroundColor: "#111",
-    color: "#fff",
-    cursor: phoneLoading || phone.length !== 9 ? "not-allowed" : "pointer",
-    opacity: phoneLoading || phone.length !== 9 ? 0.6 : 1,
-  }}
+  className={`phone-save-button ${
+    phoneLoading || phone.length !== 9 ? "is-disabled" : ""
+  }`}
 >
   {phoneLoading ? "Guardando..." : "Guardar"}
 </button>
@@ -767,36 +690,22 @@ const resetDragState = () => {
 )}
 {listingMessage && (
   <p
-    style={{
-      marginTop: "20px",
-      padding: "12px",
-      borderRadius: "8px",
-      backgroundColor: listingMessage.includes("✅") ? "#e6f9ec" : "#fdecea",
-      color: listingMessage.includes("✅") ? "#1e7e34" : "#b02a37",
-      border: listingMessage.includes("✅")
-        ? "1px solid #b7ebc6"
-        : "1px solid #f5c2c7",
-    }}
+    className={`form-message ${
+      listingMessage.includes("✅") ? "is-success" : "is-error"
+    }`}
   >
     {listingMessage}
   </p>
 )}
-      <form
-        onSubmit={handleSubmit}
-        style={{ display: "grid", gap: "16px", marginTop: "24px" }}
-      ><div
-  style={{
-    border: "1px solid #ddd",
-    borderRadius: "12px",
-    padding: "20px",
-    backgroundColor: "#fafafa",
-  }}
->
-  <h2 style={{ marginTop: 0, marginBottom: "16px", fontSize: "18px" }}>
+<form
+  onSubmit={handleSubmit}
+  className="listing-form"
+><div className="form-section-card">
+  <h2 className="form-section-title">
     Datos del anuncio
   </h2>
 
-  <div style={{ display: "grid", gap: "16px" }}>
+  <div className="form-section-fields">
     <div>
   <label className="label">
     Nombre del anuncio <span className="required">*</span>
@@ -823,8 +732,7 @@ const resetDragState = () => {
   value={description}
   onChange={(e) => setDescription(e.target.value)}
   rows={5}
-  className="textarea"
-  style={{ resize: "vertical" }}
+  className="textarea textarea-resize-vertical"
 />
 
   {description.trim().length > 0 && description.trim().length < 10 && (
@@ -838,7 +746,7 @@ const resetDragState = () => {
       <label className="label">
         Especialidad <span className="required">*</span>
       </label>
-            <select
+      <select
         value={selectedSpecialtyId}
         onChange={(e) => setSelectedSpecialtyId(e.target.value)}
         className="select"
@@ -850,248 +758,17 @@ const resetDragState = () => {
         ))}
       </select>
     </div>
-           <div>
-           <label className="label">
-        Imágenes del anuncio <span className="required">*</span>
-      </label>
-      <div
-  onDragOver={(e) => e.preventDefault()}
-  onDrop={async (e) => {
-    e.preventDefault();
-    await processIncomingImages(Array.from(e.dataTransfer.files || []));
-  }}
-  className="listing-image-dropzone"
->
-  Suelta aquí tus imágenes para subirlas
-</div>
-
-      <input
-        type="file"
-        accept="image/*"
-        multiple
-        disabled={imagesOptimizing}
-        onChange={async (e) => {
-          const input = e.target;
-          await processIncomingImages(Array.from(input.files || []));
-          input.value = "";
-        }}
-        className="input"
-      />
-
-      <p className="listing-image-help-text">
-        Puedes subir entre 1 y 8 imágenes. Puedes añadir más en varias tandas. Se optimizarán automáticamente antes del envío.
-      </p>
-
-      {imagesOptimizing && (
-        <p className="form-helper-info">
-          Optimizando imágenes... espera un momento.
-        </p>
-      )}
-      {imageMessages.length > 0 && (
-        <div>
-          {imageMessages.map((message, index) => (
-            <p
-              key={index}
-              className={imageMessageType === "error" ? "form-helper-error" : "form-helper-info"}
-            >
-              {message}
-            </p>
-          ))}
-        </div>
-      )}
-</div>
-      <p className="listing-image-order-help">
-        La imagen principal será la que se mostrará primero en los resultados. También puedes cambiar el orden con las flechas.
-      </p>
-
-{imagesTouched && images.length === 0 && (
-  <p className="form-helper-error">
-    Debes añadir al menos 1 imagen.
-  </p>
-)}
-
-      {images.length > 0 && (
-        <p className="listing-image-count">
-          {images.length} imagen(es) seleccionada(s)
-        </p>
-      )}
-      {images.length > 0 && (
-  <div className="listing-image-grid">
-{images.map((image, index) => (
-    <div
-      key={index}
-      draggable
-onDragStart={(e) => {
-  draggedImageIndexRef.current = index;
-  setDraggedImageIndex(index);
-
-  if (transparentDragImageRef.current) {
-    e.dataTransfer.setDragImage(transparentDragImageRef.current, 0, 0);
-  }
-
-  e.dataTransfer.effectAllowed = "move";
-}}
-      onDragOver={(e) => {
-        e.preventDefault();
-
-        const currentDraggedIndex = draggedImageIndexRef.current;
-        if (currentDraggedIndex === null) return;
-
-        const rect = e.currentTarget.getBoundingClientRect();
-        const middleX = rect.left + rect.width / 2;
-        const position = e.clientX < middleX ? "before" : "after";
-
-        setDragOverIndex(index);
-        setDragInsertPosition(position);
-
-        const targetIndex = position === "after" ? index + 1 : index;
-        const finalTargetIndex = getFinalDropIndex(currentDraggedIndex, targetIndex);
-
-        if (currentDraggedIndex === finalTargetIndex) return;
-
-        const newIndex = moveImage(currentDraggedIndex, targetIndex);
-        draggedImageIndexRef.current = newIndex;
-        setDraggedImageIndex(newIndex);
-      }}
-      onDrop={() => {
-        resetDragState();
-      }}
-      onDragEnd={() => {
-        resetDragState();
-      }}
-      className={`listing-image-card${
-        draggedImageIndex === index ? " is-dragging" : ""
-      }${
-        dragOverIndex === index && dragInsertPosition === "before"
-          ? " is-drag-over-before"
-          : ""
-      }${
-        dragOverIndex === index && dragInsertPosition === "after"
-          ? " is-drag-over-after"
-          : ""
-      }`}
-    >
-    <img
-      src={imagePreviews[index]}
-      alt={`preview-${index}`}
-      draggable={false}
-      className="listing-image-preview"
-      style={{
-        border: index === mainImageIndex ? "3px solid #111" : "1px solid #ddd",
-        boxShadow:
-          index === mainImageIndex
-            ? "0 0 0 2px rgba(17, 17, 17, 0.08), 0 6px 16px rgba(0, 0, 0, 0.12)"
-            : "none",
-        opacity: draggedImageIndex === index ? 0.6 : 1,
-      }}
-    />
-
-    {index === mainImageIndex && (
-      <div className="listing-image-badge-main">
-        Principal
-      </div>
-    )}
-
-{index !== mainImageIndex && (
-  <button
-    type="button"
-    onMouseDown={preventButtonDrag}
-    onClick={() => {
-      setAsMainImage(index);
-    }}
-    className="listing-image-action-button listing-image-make-main-button"
-  >
-    Hacer principal
-  </button>
-)}
-
-    <button
-      type="button"
-      onMouseDown={preventButtonDrag}
-      onClick={() => {
-        moveImageLeft(index);
-      }}
-      disabled={index === 0}
-      className="listing-image-action-button listing-image-move-left-button"
-    >
-      ←
-    </button>
-
-    <button
-      type="button"
-      onMouseDown={preventButtonDrag}
-      onClick={() => {
-        moveImageRight(index);
-      }}
-      disabled={index === images.length - 1}
-      className="listing-image-action-button listing-image-move-right-button"
-    >
-      →
-    </button>
-
-    <button
-      type="button"
-      onMouseDown={preventButtonDrag}
-      onClick={() => {
-        removeImage(index);
-      }}
-      className="listing-image-remove-button"
-    >
-      ×
-    </button>
   </div>
-))}
-
-<div
-  onDragOver={(e) => {
-    e.preventDefault();
-
-    const currentDraggedIndex = draggedImageIndexRef.current;
-    if (currentDraggedIndex === null) return;
-
-    setDragOverIndex(images.length);
-    setDragInsertPosition("after");
-
-    const finalTargetIndex = getFinalDropIndex(currentDraggedIndex, images.length);
-
-    if (currentDraggedIndex === finalTargetIndex) return;
-
-    const newIndex = moveImage(currentDraggedIndex, images.length);
-    draggedImageIndexRef.current = newIndex;
-    setDraggedImageIndex(newIndex);
-  }}
-  onDrop={() => {
-    resetDragState();
-  }}
-  onDragEnd={() => {
-    resetDragState();
-  }}
-  className={`listing-image-move-end-dropzone${
-    dragOverIndex === images.length ? " is-active" : ""
-  }`}
->
-  Suelta aquí para mover al final
 </div>
 
-  </div>
-)}
+<ListingImagesBlock {...listingImagesBlockProps} />
 
-</div>
-</div>
-
-        <div
-  style={{
-    border: "1px solid #ddd",
-    borderRadius: "12px",
-    padding: "20px",
-    backgroundColor: "#fafafa",
-  }}
->
-  <h2 style={{ marginTop: 0, marginBottom: "16px", fontSize: "18px" }}>
+<div className="form-section-card">
+  <h2 className="form-section-title">
     Condiciones del servicio
   </h2>
 
-  <div style={{ display: "grid", gap: "16px" }}>
+  <div className="form-section-fields">
     <div>
   <label className="label">
     Precio por m² <span className="required">*</span>
@@ -1159,19 +836,12 @@ onDragStart={(e) => {
     </div>
   </div>
 </div>
-<div
-  style={{
-    border: "1px solid #ddd",
-    borderRadius: "12px",
-    padding: "20px",
-    backgroundColor: "#fafafa",
-  }}
->
-  <h2 style={{ marginTop: 0, marginBottom: "16px", fontSize: "18px" }}>
+<div className="form-section-card">
+  <h2 className="form-section-title">
     Ubicación
   </h2>
 
-  <div style={{ display: "grid", gap: "16px" }}>
+  <div className="form-section-fields">
     <div>
   <label className="label">
     Ciudad <span className="required">*</span>
@@ -1250,21 +920,12 @@ onDragStart={(e) => {
 </div>
   </div>
 </div>
-<label
-  style={{
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "10px",
-    padding: "12px 0",
-    fontSize: "14px",
-    lineHeight: 1.4,
-  }}
->
+<label className="form-checkbox-row">
   <input
     type="checkbox"
     checked={acceptTerms}
     onChange={(e) => setAcceptTerms(e.target.checked)}
-    style={{ marginTop: "3px" }}
+    className="form-checkbox-input"
   />
   <span>
     Confirmo que la información del anuncio es veraz y acepto los términos
@@ -1274,18 +935,12 @@ onDragStart={(e) => {
 
 
 
-        <button
+<button
   type="submit"
-disabled={loading || imagesOptimizing || !phoneSaved}
-  style={{
-    padding: "12px 16px",
-    cursor: loading || !phoneSaved ? "not-allowed" : "pointer",
-    opacity: loading || !phoneSaved ? 0.6 : 1,
-    border: "1px solid #111",
-    borderRadius: "8px",
-    backgroundColor: "#111",
-    color: "#fff",
-  }}
+  disabled={loading || imagesOptimizing || !phoneSaved}
+  className={`form-submit-button${
+    loading || imagesOptimizing || !phoneSaved ? " is-disabled" : ""
+  }`}
 >
 {loading
   ? "Creando..."
