@@ -19,6 +19,7 @@ import ListingLocationSection from "@/components/ListingLocationSection";
 import {
   applyListingFormInitialData,
   createListingFormData,
+  createListingUpdateFormData,
   fetchExistingListingFormData,
   fetchInitialListingFormData,
   handleListingBackendError,
@@ -31,6 +32,23 @@ import {
   validateListingForm,
   validateProfessionalPhone,
 } from "@/lib/listing-form";
+import {
+  createExistingUnifiedListingImages,
+  createNewUnifiedListingImages,
+  ensureSingleMainImage,
+  getFinalDropIndex,
+  getKeptExistingImageIds,
+  getMainImageIndex,
+  getMainImageKey,
+  getNewImageFiles,
+  getNewImageKeys,
+  getNewImageNames,
+  getOrderedImageKeys,
+  moveListingImagesArray,
+  removeListingImageByKey,
+  revokeNewListingImageObjectUrls,
+  setMainListingImageByKey,
+} from "@/lib/listing-images";
 import type {
   ListingBasicDataSectionProps,
   ListingFormInitialData,
@@ -42,11 +60,14 @@ import type {
   Specialty,
   TermsCheckboxBlockProps,
   UserData,
+  ListingSubmissionIntent,
+  ListingStatusValue,
 } from "@/types/listing-form";
 import type {
   DragInsertPosition,
   ImageMessageType,
   ListingImagesBlockProps,
+  UnifiedListingImage,
 } from "@/types/listing-images";
 
 export default function ListingTestPage() {
@@ -58,6 +79,8 @@ export default function ListingTestPage() {
     null
   );
   const [isLoadingInitialData, setIsLoadingInitialData] = useState(false);
+  const currentListingStatus: ListingStatusValue =
+    initialData?.status ?? "DRAFT";
 
   const [displayName, setDisplayName] = useState(
     LISTING_FORM_DEFAULTS.displayName
@@ -104,9 +127,10 @@ export default function ListingTestPage() {
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [phone, setPhone] = useState("");
   const [phoneSaved, setPhoneSaved] = useState(false);
-  const [images, setImages] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [listingImages, setListingImages] = useState<UnifiedListingImage[]>([]);
   const [imagesTouched, setImagesTouched] = useState(false);
+  const [currentSubmitIntent, setCurrentSubmitIntent] =
+    useState<ListingSubmissionIntent | null>(null);
   const [mainImageIndex, setMainImageIndex] = useState(
     LISTING_FORM_DEFAULTS.mainImageIndex
   );
@@ -118,6 +142,7 @@ export default function ListingTestPage() {
     useState<DragInsertPosition>(null);
   const draggedImageIndexRef = useRef<number | null>(null);
   const transparentDragImageRef = useRef<HTMLImageElement | null>(null);
+  const previousListingImagesRef = useRef<UnifiedListingImage[]>([]);
 
   useEffect(() => {
     fetchInitialListingFormData({
@@ -134,13 +159,33 @@ export default function ListingTestPage() {
   useEffect(() => {
     if (!listingId) {
       setInitialData(null);
+      setListingImages((prev) => {
+        revokeNewListingImageObjectUrls(prev);
+        return [];
+      });
+      setImagesTouched(false);
       setIsLoadingInitialData(false);
       return;
     }
 
+    setListingImages((prev) => {
+      revokeNewListingImageObjectUrls(prev);
+      return [];
+    });
+    setImagesTouched(false);
+    setImageMessages([]);
+
     fetchExistingListingFormData({
       listingId,
       setInitialData,
+      setExistingImages: (valueOrUpdater) => {
+        if (typeof valueOrUpdater === "function") {
+          return;
+        }
+
+        setListingImages(createExistingUnifiedListingImages(valueOrUpdater));
+      },
+      setMainImageKey: () => undefined,
       setListingMessage,
       setIsLoadingInitialData,
     });
@@ -169,6 +214,37 @@ export default function ListingTestPage() {
       setMainImageIndex,
     });
   }, [checkingUser, initialData, specialties]);
+
+  useEffect(() => {
+    const previousListingImages = previousListingImagesRef.current;
+    const currentNewImageKeys = new Set(
+      listingImages
+        .filter((image) => image.kind === "new")
+        .map((image) => image.key)
+    );
+
+    previousListingImages.forEach((image) => {
+      if (image.kind === "new" && !currentNewImageKeys.has(image.key)) {
+        URL.revokeObjectURL(image.previewUrl);
+      }
+    });
+
+    previousListingImagesRef.current = listingImages;
+  }, [listingImages]);
+
+  useEffect(() => {
+    return () => {
+      revokeNewListingImageObjectUrls(previousListingImagesRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const transparentPixel = new Image();
+    transparentPixel.src =
+      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+    transparentDragImageRef.current = transparentPixel;
+  }, []);
 
   const compressImagesBeforeUpload = async (files: File[]) => {
     const compressionOptions = {
@@ -201,7 +277,8 @@ export default function ListingTestPage() {
     const files = Array.from(incomingFiles || []);
     if (files.length === 0) return;
 
-    const availableSlots = 8 - images.length;
+    const totalCurrentImages = listingImages.length;
+    const availableSlots = 8 - totalCurrentImages;
 
     setImagesTouched(true);
     setListingMessage("");
@@ -240,9 +317,10 @@ export default function ListingTestPage() {
       (file) => validTypes.includes(file.type) && file.size <= maxSizeBytes
     );
 
-    const nonDuplicateFiles = validFiles.filter((file) => {
-      return !images.some((existingImage) => existingImage.name === file.name);
-    });
+    const existingFileNames = getNewImageNames(listingImages);
+    const nonDuplicateFiles = validFiles.filter(
+      (file) => !existingFileNames.includes(file.name)
+    );
 
     if (nonDuplicateFiles.length < validFiles.length) {
       nextImageMessages.push("Algunas imágenes duplicadas no se han añadido");
@@ -264,12 +342,17 @@ export default function ListingTestPage() {
     try {
       setImagesOptimizing(true);
       const compressedFiles = await compressImagesBeforeUpload(limitedFiles);
+      const nextNewImages = createNewUnifiedListingImages(compressedFiles);
 
-      setImages((prev) => [...prev, ...compressedFiles]);
+      setListingImages((prev) => {
+        const nextListingImages = ensureSingleMainImage([
+          ...prev,
+          ...nextNewImages,
+        ]);
 
-      if (images.length === 0) {
-        setMainImageIndex(0);
-      }
+        setMainImageIndex(getMainImageIndex(nextListingImages));
+        return nextListingImages;
+      });
     } catch (error) {
       console.error("Error al optimizar imágenes:", error);
       setImageMessages(["No se pudieron optimizar las imágenes"]);
@@ -279,83 +362,115 @@ export default function ListingTestPage() {
     }
   };
 
-  useEffect(() => {
-    const previewUrls = images.map((image) => URL.createObjectURL(image));
-    setImagePreviews(previewUrls);
+  const getSuccessMessageForIntent = (submissionIntent: ListingSubmissionIntent) => {
+    if (submissionIntent === "draft") {
+      if (isEditMode && currentListingStatus === "PUBLISHED") {
+        return "✅ El anuncio se ha guardado como borrador";
+      }
 
-    return () => {
-      previewUrls.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [images]);
+      return isEditMode
+        ? "✅ Borrador guardado correctamente"
+        : "✅ Borrador creado correctamente";
+    }
 
-  useEffect(() => {
-    const transparentPixel = new Image();
-    transparentPixel.src =
-      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+    if (isEditMode) {
+      return currentListingStatus === "PUBLISHED"
+        ? "✅ Anuncio publicado actualizado correctamente"
+        : "✅ Anuncio guardado y publicado correctamente";
+    }
 
-    transparentDragImageRef.current = transparentPixel;
-  }, []);
+    return "✅ Anuncio publicado correctamente";
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    const validationResult = validateListingForm({
-      displayName,
-      description,
-      city,
-      province,
-      postalCode,
-      serviceRadiusKm,
-      selectedSpecialtyId,
-      pricePerM2,
-      imagesCount: images.length,
-      acceptTerms,
-      requireImages: !isEditMode,
-    });
+    const nativeSubmitEvent = e.nativeEvent as SubmitEvent;
+    const submitter = nativeSubmitEvent.submitter as HTMLButtonElement | null;
+    const submissionIntent: ListingSubmissionIntent =
+      submitter?.value === "publish" ? "publish" : "draft";
 
-    if (validationResult) {
-      if (validationResult.touchImages) {
-        setImagesTouched(true);
+    if (submissionIntent === "publish") {
+      const validationResult = validateListingForm({
+        displayName,
+        description,
+        city,
+        province,
+        postalCode,
+        serviceRadiusKm,
+        selectedSpecialtyId,
+        pricePerM2,
+        totalImagesCount: listingImages.length,
+        acceptTerms,
+      });
+
+      if (validationResult) {
+        if (validationResult.touchImages) {
+          setImagesTouched(true);
+        }
+
+        setListingMessage(validationResult.message);
+        return;
       }
-
-      setListingMessage(validationResult.message);
-      return;
     }
 
     setLoading(true);
+    setCurrentSubmitIntent(submissionIntent);
     setListingMessage("");
     setPhoneMessage("");
 
     try {
-      const formData = createListingFormData({
-        displayName,
-        description,
-        yearsExperience,
-        availability,
-        budgetType,
-        postalCode,
-        city,
-        province,
-        serviceRadiusKm,
-        mainImageIndex,
-        selectedSpecialtyId,
-        pricePerM2,
-        images,
-      });
-
       const endpoint = isEditMode
         ? `/api/listings/${listingId}/update`
         : "/api/listings/create";
-      const method = isEditMode ? "PUT" : "POST";
-      const successMessage = isEditMode
-        ? "✅ Anuncio actualizado correctamente"
-        : "✅ Anuncio creado correctamente";
 
-      const response = await fetch(endpoint, {
-        method,
-        body: formData,
-      });
+      const mainImageKey = getMainImageKey(listingImages);
+      const newImageFiles = getNewImageFiles(listingImages);
 
+      const requestOptions = isEditMode
+        ? {
+            method: "PATCH",
+            body: createListingUpdateFormData({
+              displayName,
+              description,
+              yearsExperience,
+              availability,
+              budgetType,
+              postalCode,
+              city,
+              province,
+              serviceRadiusKm,
+              selectedSpecialtyId,
+              pricePerM2,
+              keptExistingImageIds: getKeptExistingImageIds(listingImages),
+              orderedImageKeys: getOrderedImageKeys(listingImages),
+              newImageKeys: getNewImageKeys(listingImages),
+              mainImageKey,
+              images: newImageFiles,
+              submissionIntent,
+            }),
+          }
+        : {
+            method: "POST",
+            body: createListingFormData({
+              displayName,
+              description,
+              yearsExperience,
+              availability,
+              budgetType,
+              postalCode,
+              city,
+              province,
+              serviceRadiusKm,
+              mainImageIndex: getMainImageIndex(listingImages),
+              selectedSpecialtyId,
+              pricePerM2,
+              images: newImageFiles,
+              submissionIntent,
+            }),
+          };
+
+      const response = await fetch(endpoint, requestOptions);
       const data = await response.json();
 
       if (!response.ok) {
@@ -365,19 +480,50 @@ export default function ListingTestPage() {
           setPhoneSaved,
           setLoading,
         });
+        setCurrentSubmitIntent(null);
+        return;
+      }
+
+      if (isEditMode) {
+        handleListingSuccess({
+          setListingMessage,
+          successMessage: getSuccessMessageForIntent(submissionIntent),
+          resetForm: () => {
+            setListingImages((prev) => {
+              revokeNewListingImageObjectUrls(prev);
+              return prev.filter((image) => image.kind === "existing");
+            });
+            setImagesTouched(false);
+            fetchExistingListingFormData({
+              listingId,
+              setInitialData,
+              setExistingImages: (valueOrUpdater) => {
+                if (typeof valueOrUpdater === "function") {
+                  return;
+                }
+
+                setListingImages(createExistingUnifiedListingImages(valueOrUpdater));
+              },
+              setMainImageKey: () => undefined,
+              setListingMessage: () => undefined,
+              setIsLoadingInitialData,
+            });
+          },
+          setLoading,
+        });
+        setCurrentSubmitIntent(null);
         return;
       }
 
       handleListingSuccess({
-        successMessage,
         setListingMessage,
+        successMessage: getSuccessMessageForIntent(submissionIntent),
         resetForm: () => {
-          if (isEditMode) {
-            window.scrollTo({ top: 0, behavior: "smooth" });
-            return;
-          }
-
           setInitialData(null);
+          setListingImages((prev) => {
+            revokeNewListingImageObjectUrls(prev);
+            return [];
+          });
           resetListingFormAfterSuccess({
             setDisplayName,
             setDescription,
@@ -390,8 +536,8 @@ export default function ListingTestPage() {
             setAvailability,
             setBudgetType,
             setYearsExperience,
-            setImages,
-            setImagePreviews,
+            setImages: () => undefined,
+            setImagePreviews: () => undefined,
             setImagesTouched,
             setMainImageIndex,
             setSelectedSpecialtyId,
@@ -400,6 +546,7 @@ export default function ListingTestPage() {
         },
         setLoading,
       });
+      setCurrentSubmitIntent(null);
     } catch (error) {
       console.error(
         isEditMode
@@ -411,6 +558,7 @@ export default function ListingTestPage() {
         setListingMessage,
         setLoading,
       });
+      setCurrentSubmitIntent(null);
     }
   };
 
@@ -468,85 +616,55 @@ export default function ListingTestPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const getFinalDropIndex = (fromIndex: number, toIndex: number) => {
-    let finalToIndex = toIndex;
+  const moveListingImage = (fromIndex: number, toIndex: number) => {
+    let nextDraggedIndex = fromIndex;
 
-    if (fromIndex < toIndex) {
-      finalToIndex = toIndex - 1;
-    }
+    setListingImages((prev) => {
+      const { updatedImages, finalToIndex } = moveListingImagesArray(
+        prev,
+        fromIndex,
+        toIndex
+      );
 
-    return finalToIndex;
-  };
+      nextDraggedIndex = finalToIndex;
+      setMainImageIndex(getMainImageIndex(updatedImages));
 
-  const moveImage = (fromIndex: number, toIndex: number) => {
-    if (fromIndex < 0 || toIndex < 0) return fromIndex;
-    if (fromIndex >= images.length || toIndex > images.length) return fromIndex;
-
-    const finalToIndex = getFinalDropIndex(fromIndex, toIndex);
-
-    if (fromIndex === finalToIndex) return finalToIndex;
-
-    setImages((prev) => {
-      const updated = [...prev];
-      const [movedImage] = updated.splice(fromIndex, 1);
-      updated.splice(finalToIndex, 0, movedImage);
-      return updated;
+      return updatedImages;
     });
 
-    if (mainImageIndex === fromIndex) {
-      setMainImageIndex(finalToIndex);
-    } else if (
-      fromIndex < finalToIndex &&
-      mainImageIndex > fromIndex &&
-      mainImageIndex <= finalToIndex
-    ) {
-      setMainImageIndex((prev) => prev - 1);
-    } else if (
-      fromIndex > finalToIndex &&
-      mainImageIndex >= finalToIndex &&
-      mainImageIndex < fromIndex
-    ) {
-      setMainImageIndex((prev) => prev + 1);
-    }
-
-    return finalToIndex;
+    return nextDraggedIndex;
   };
 
-  const removeImage = (indexToRemove: number) => {
-    setImages((prev) => {
-      const updated = prev.filter((_, i) => i !== indexToRemove);
+  const moveListingImageLeft = (indexToMove: number) => {
+    if (indexToMove <= 0) return;
+    moveListingImage(indexToMove, indexToMove - 1);
+  };
 
-      if (updated.length === 0) {
+  const moveListingImageRight = (indexToMove: number) => {
+    if (indexToMove >= listingImages.length - 1) return;
+    moveListingImage(indexToMove, indexToMove + 2);
+  };
+
+  const removeListingImage = (imageKey: string) => {
+    setListingImages((prev) => {
+      const updatedImages = removeListingImageByKey(prev, imageKey);
+
+      if (updatedImages.length === 0) {
         setImageMessages([]);
         setImagesTouched(false);
-        setMainImageIndex(0);
-      } else {
-        if (indexToRemove === mainImageIndex) {
-          setMainImageIndex(0);
-        } else if (indexToRemove < mainImageIndex) {
-          setMainImageIndex((prevMainImageIndex) => prevMainImageIndex - 1);
-        }
       }
 
-      return updated;
+      setMainImageIndex(getMainImageIndex(updatedImages));
+      return updatedImages;
     });
   };
 
-  const setAsMainImage = (indexToSet: number) => {
-    if (indexToSet < 0 || indexToSet >= images.length) return;
-    if (indexToSet === mainImageIndex) return;
-
-    setMainImageIndex(indexToSet);
-  };
-
-  const moveImageLeft = (indexToMove: number) => {
-    if (indexToMove <= 0) return;
-    moveImage(indexToMove, indexToMove - 1);
-  };
-
-  const moveImageRight = (indexToMove: number) => {
-    if (indexToMove >= images.length - 1) return;
-    moveImage(indexToMove, indexToMove + 2);
+  const setListingImageAsMain = (imageKey: string) => {
+    setListingImages((prev) => {
+      const updatedImages = setMainListingImageByKey(prev, imageKey);
+      setMainImageIndex(getMainImageIndex(updatedImages));
+      return updatedImages;
+    });
   };
 
   const resetDragState = () => {
@@ -557,13 +675,12 @@ export default function ListingTestPage() {
   };
 
   const listingImagesBlockProps = {
-    images,
-    imagePreviews,
+    isEditMode,
+    listingImages,
     imagesTouched,
     imageMessages,
     imageMessageType,
     imagesOptimizing,
-    mainImageIndex,
     draggedImageIndex,
     dragOverIndex,
     dragInsertPosition,
@@ -571,11 +688,11 @@ export default function ListingTestPage() {
     transparentDragImageRef,
     processIncomingImages,
     getFinalDropIndex,
-    moveImage,
-    moveImageLeft,
-    moveImageRight,
-    removeImage,
-    setAsMainImage,
+    moveListingImage,
+    moveListingImageLeft,
+    moveListingImageRight,
+    removeListingImage,
+    setListingImageAsMain,
     resetDragState,
     setDraggedImageIndex,
     setDragOverIndex,
@@ -603,10 +720,12 @@ export default function ListingTestPage() {
   } satisfies TermsCheckboxBlockProps;
 
   const listingSubmitButtonProps = {
-    mode: isEditMode ? "edit" : "create",
     loading,
     imagesOptimizing,
     phoneSaved,
+    isEditMode,
+    currentSubmitIntent,
+    currentListingStatus,
   } satisfies ListingSubmitButtonProps;
 
   const listingBasicDataSectionProps = {
@@ -680,9 +799,18 @@ export default function ListingTestPage() {
         Profesional detectado: <strong>{user.name}</strong>
       </p>
 
+      <div
+        className={`listing-status-banner ${
+          currentListingStatus === "PUBLISHED" ? "is-published" : "is-draft"
+        }`}
+      >
+        Estado actual del anuncio: <strong>{currentListingStatus}</strong>
+      </div>
+
       {isEditMode && (
         <p className="listing-page-intro">
-          Modo edición activo: estás modificando un anuncio existente.
+          Modo edición activo: puedes guardar este anuncio como borrador o
+          publicarlo sin salir del mismo formulario.
         </p>
       )}
 

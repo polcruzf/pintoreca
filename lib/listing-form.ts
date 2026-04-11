@@ -2,6 +2,7 @@ import { SPAIN_PROVINCES } from "@/constants/spain-provinces";
 import type {
   ApplyListingFormInitialDataParams,
   CreateListingFormDataParams,
+  CreateListingUpdateFormDataParams,
   ExistingListingFormData,
   FetchExistingListingFormDataParams,
   FetchExistingListingFormDataResponse,
@@ -16,6 +17,7 @@ import type {
   ListingFormDefaults,
   ListingFormInitialData,
   ListingFormInitialValues,
+  ListingSubmissionIntent,
   ListingValidationInput,
   ListingValidationResult,
   PhoneValidationResult,
@@ -127,6 +129,7 @@ export function createListingFormInitialDataFromExistingListing(
     availability: listing.availability,
     budgetType: listing.budgetType,
     yearsExperience: listing.yearsExperience,
+    status: listing.status,
     acceptTerms: false,
     mainImageIndex: 0,
   };
@@ -135,11 +138,15 @@ export function createListingFormInitialDataFromExistingListing(
 export async function fetchExistingListingFormData({
   listingId,
   setInitialData,
+  setExistingImages,
+  setMainImageKey,
   setListingMessage,
   setIsLoadingInitialData,
 }: FetchExistingListingFormDataParams): Promise<void> {
   if (!listingId.trim()) {
     setInitialData(null);
+    setExistingImages([]);
+    setMainImageKey(null);
     setIsLoadingInitialData(false);
     return;
   }
@@ -152,17 +159,29 @@ export async function fetchExistingListingFormData({
 
     if (!response.ok || !data.listing) {
       setInitialData(null);
+      setExistingImages([]);
+      setMainImageKey(null);
       setListingMessage(data.error || "No se pudo cargar el anuncio");
       setIsLoadingInitialData(false);
       return;
     }
 
     setInitialData(createListingFormInitialDataFromExistingListing(data.listing));
+    setExistingImages(data.listing.images || []);
+
+    const primaryImage =
+      data.listing.images.find((image) => image.isPrimary) ||
+      data.listing.images[0] ||
+      null;
+
+    setMainImageKey(primaryImage ? `existing:${primaryImage.id}` : null);
     setListingMessage("");
     setIsLoadingInitialData(false);
   } catch (error) {
     console.error("Error al cargar datos iniciales del anuncio:", error);
     setInitialData(null);
+    setExistingImages([]);
+    setMainImageKey(null);
     setListingMessage("Error al cargar los datos iniciales del anuncio");
     setIsLoadingInitialData(false);
   }
@@ -233,12 +252,12 @@ export function handleListingConnectionError({
 }
 
 export function handleListingSuccess({
-  successMessage,
   setListingMessage,
   resetForm,
   setLoading,
+  successMessage,
 }: HandleListingSuccessParams): void {
-  setListingMessage(successMessage);
+  setListingMessage(successMessage || "✅ Anuncio creado correctamente");
   window.scrollTo({ top: 0, behavior: "smooth" });
   resetForm();
   setLoading(false);
@@ -256,7 +275,7 @@ export function handleListingBackendError({
     data.error ||
       data.message ||
       JSON.stringify(data) ||
-      "Error al crear el anuncio"
+      "Error al guardar el anuncio"
   );
 
   if (
@@ -283,6 +302,7 @@ export function createListingFormData({
   selectedSpecialtyId,
   pricePerM2,
   images,
+  submissionIntent,
 }: CreateListingFormDataParams): FormData {
   const formData = new FormData();
 
@@ -303,8 +323,63 @@ export function createListingFormData({
   formData.append("longitude", "2.1734");
   formData.append("serviceRadiusKm", serviceRadiusKm);
   formData.append("mainImageIndex", String(mainImageIndex));
+  formData.append("submissionIntent", submissionIntent);
   formData.append("specialtyId", selectedSpecialtyId);
   formData.append("pricePerM2", pricePerM2);
+  formData.append(
+    "specialties",
+    JSON.stringify([
+      {
+        specialtyId: selectedSpecialtyId,
+        pricePerM2: Number(pricePerM2),
+      },
+    ])
+  );
+
+  images.forEach((image) => {
+    formData.append("images", image);
+  });
+
+  return formData;
+}
+
+export function createListingUpdateFormData({
+  displayName,
+  description,
+  yearsExperience,
+  availability,
+  budgetType,
+  postalCode,
+  city,
+  province,
+  serviceRadiusKm,
+  selectedSpecialtyId,
+  pricePerM2,
+  keptExistingImageIds,
+  orderedImageKeys,
+  newImageKeys,
+  mainImageKey,
+  images,
+  submissionIntent,
+}: CreateListingUpdateFormDataParams): FormData {
+  const formData = new FormData();
+
+  formData.append("displayName", displayName);
+  formData.append("description", description);
+  formData.append("yearsExperience", yearsExperience);
+  formData.append("availability", availability);
+  formData.append("budgetType", budgetType);
+  formData.append("postalCode", postalCode);
+  formData.append("city", city);
+  formData.append("province", province);
+  formData.append("serviceRadiusKm", serviceRadiusKm);
+  formData.append("selectedSpecialtyId", selectedSpecialtyId);
+  formData.append("pricePerM2", pricePerM2);
+  formData.append("keptExistingImageIds", JSON.stringify(keptExistingImageIds));
+  formData.append("orderedImageKeys", JSON.stringify(orderedImageKeys));
+  formData.append("newImageKeys", JSON.stringify(newImageKeys));
+  formData.append("mainImageKey", mainImageKey || "");
+  formData.append("submissionIntent", submissionIntent);
 
   images.forEach((image) => {
     formData.append("images", image);
@@ -322,9 +397,8 @@ export function validateListingForm({
   serviceRadiusKm,
   selectedSpecialtyId,
   pricePerM2,
-  imagesCount,
+  totalImagesCount,
   acceptTerms,
-  requireImages = true,
 }: ListingValidationInput): ListingValidationResult {
   if (!displayName.trim()) {
     return { message: "El nombre del anuncio es obligatorio" };
@@ -379,7 +453,7 @@ export function validateListingForm({
     return { message: "El radio de servicio debe ser mayor que 0" };
   }
 
-  if (requireImages && imagesCount === 0) {
+  if (totalImagesCount === 0) {
     return {
       message: "Debes añadir al menos una imagen",
       touchImages: true,
@@ -427,7 +501,9 @@ export function resetListingFormAfterSuccess({
   setImagePreviews([]);
   setImagesTouched(false);
   setMainImageIndex(LISTING_FORM_DEFAULTS.mainImageIndex);
-  setSelectedSpecialtyId(specialties[0]?.id || LISTING_FORM_DEFAULTS.selectedSpecialtyId);
+  setSelectedSpecialtyId(
+    specialties[0]?.id || LISTING_FORM_DEFAULTS.selectedSpecialtyId
+  );
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 

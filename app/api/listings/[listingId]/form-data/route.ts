@@ -24,7 +24,7 @@ type RouteContext = {
   }>;
 };
 
-export async function GET(_: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const { userId } = await auth();
 
@@ -55,19 +55,12 @@ export async function GET(_: Request, context: RouteContext) {
 
     if (!user || user.role !== "PROFESSIONAL" || !user.professionalProfile) {
       return NextResponse.json(
-        { error: "Solo los profesionales pueden cargar datos de anuncios" },
+        { error: "Solo los profesionales pueden acceder a sus anuncios" },
         { status: 403 }
       );
     }
 
     const { listingId } = await context.params;
-
-    if (!listingId) {
-      return NextResponse.json(
-        { error: "Falta el identificador del anuncio" },
-        { status: 400 }
-      );
-    }
 
     const listing = await prisma.listing.findFirst({
       where: {
@@ -80,6 +73,11 @@ export async function GET(_: Request, context: RouteContext) {
             createdAt: "asc",
           },
         },
+        images: {
+          orderBy: {
+            sortOrder: "asc",
+          },
+        },
       },
     });
 
@@ -90,14 +88,7 @@ export async function GET(_: Request, context: RouteContext) {
       );
     }
 
-    const primaryListingSpecialty = listing.specialties[0];
-
-    if (!primaryListingSpecialty) {
-      return NextResponse.json(
-        { error: "El anuncio no tiene especialidad asociada" },
-        { status: 400 }
-      );
-    }
+    const primaryListingSpecialty = listing.specialties[0] ?? null;
 
     return NextResponse.json({
       listing: {
@@ -111,15 +102,27 @@ export async function GET(_: Request, context: RouteContext) {
         city: listing.city,
         province: listing.province,
         serviceRadiusKm: String(listing.serviceRadiusKm),
-        selectedSpecialtyId: primaryListingSpecialty.specialtyId,
-        pricePerM2: primaryListingSpecialty.pricePerM2.toString(),
+        selectedSpecialtyId: primaryListingSpecialty?.specialtyId ?? "",
+        pricePerM2: primaryListingSpecialty?.pricePerM2?.toString() ?? "",
+        status: listing.status,
+        images: listing.images.map((img: {
+          id: string;
+          fileUrl: string;
+          sortOrder: number;
+          isPrimary: boolean;
+        }) => ({
+          id: img.id,
+          fileUrl: img.fileUrl,
+          sortOrder: img.sortOrder,
+          isPrimary: img.isPrimary,
+        })),
       },
     });
   } catch (error) {
     console.error(error);
 
     return NextResponse.json(
-      { error: "Ha ocurrido un error al obtener los datos del anuncio" },
+      { error: "Error al obtener datos del anuncio" },
       { status: 500 }
     );
   }

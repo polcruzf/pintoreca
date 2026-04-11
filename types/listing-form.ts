@@ -19,7 +19,12 @@ export type Specialty = Readonly<{
   name: string;
 }>;
 
-export type ListingMode = "create" | "edit";
+export type ExistingListingImageData = Readonly<{
+  id: string;
+  fileUrl: string;
+  isPrimary: boolean;
+  sortOrder: number;
+}>;
 
 export type ListingFormDefaults = Readonly<{
   displayName: string;
@@ -37,6 +42,18 @@ export type ListingFormDefaults = Readonly<{
   mainImageIndex: number;
 }>;
 
+export type ListingStatusValue =
+  | "DRAFT"
+  | "PUBLISHED"
+  | "PENDING_PLAN_SELECTION"
+  | "HIDDEN"
+  | "REJECTED"
+  | "SUSPENDED"
+  | "PENDING_REVIEW"
+  | "INACTIVE_DUE_TO_PLAN_LIMIT";
+
+export type ListingSubmissionIntent = "draft" | "publish";
+
 export type ListingFormInitialData = Readonly<{
   displayName?: string;
   description?: string;
@@ -51,6 +68,7 @@ export type ListingFormInitialData = Readonly<{
   budgetType?: string;
   yearsExperience?: string;
   mainImageIndex?: number;
+  status?: ListingStatusValue;
 }>;
 
 export type ListingFormInitialValues = Readonly<{
@@ -100,6 +118,8 @@ export type ExistingListingFormData = Readonly<{
   serviceRadiusKm: string;
   selectedSpecialtyId: string;
   pricePerM2: string;
+  status: ListingStatusValue;
+  images: ExistingListingImageData[];
 }>;
 
 export type FetchExistingListingFormDataResponse = Readonly<{
@@ -110,6 +130,8 @@ export type FetchExistingListingFormDataResponse = Readonly<{
 export type FetchExistingListingFormDataParams = Readonly<{
   listingId: string;
   setInitialData: Dispatch<SetStateAction<ListingFormInitialData | null>>;
+  setExistingImages: Dispatch<SetStateAction<ExistingListingImageData[]>>;
+  setMainImageKey: Dispatch<SetStateAction<string | null>>;
   setListingMessage: (value: string) => void;
   setIsLoadingInitialData: (value: boolean) => void;
 }>;
@@ -130,9 +152,8 @@ export type ListingValidationInput = Readonly<{
   serviceRadiusKm: string;
   selectedSpecialtyId: string;
   pricePerM2: string;
-  imagesCount: number;
+  totalImagesCount: number;
   acceptTerms: boolean;
-  requireImages?: boolean;
 }>;
 
 export type ResetListingFormParams = Readonly<{
@@ -169,6 +190,27 @@ export type CreateListingFormDataParams = Readonly<{
   selectedSpecialtyId: string;
   pricePerM2: string;
   images: File[];
+  submissionIntent: ListingSubmissionIntent;
+}>;
+
+export type CreateListingUpdateFormDataParams = Readonly<{
+  displayName: string;
+  description: string;
+  yearsExperience: string;
+  availability: string;
+  budgetType: string;
+  postalCode: string;
+  city: string;
+  province: string;
+  serviceRadiusKm: string;
+  selectedSpecialtyId: string;
+  pricePerM2: string;
+  keptExistingImageIds: string[];
+  orderedImageKeys: string[];
+  newImageKeys: string[];
+  mainImageKey: string | null;
+  images: File[];
+  submissionIntent: ListingSubmissionIntent;
 }>;
 
 export type ListingBackendErrorData = Readonly<{
@@ -184,10 +226,10 @@ export type HandleListingBackendErrorParams = Readonly<{
 }>;
 
 export type HandleListingSuccessParams = Readonly<{
-  successMessage: string;
   setListingMessage: (value: string) => void;
   resetForm: () => void;
   setLoading: (value: boolean) => void;
+  successMessage?: string;
 }>;
 
 export type HandleListingConnectionErrorParams = Readonly<{
@@ -299,8 +341,10 @@ export type TermsCheckboxBlockProps = Readonly<{
 }>;
 
 export type ListingSubmitButtonProps = Readonly<{
-  mode: ListingMode;
   loading: boolean;
   imagesOptimizing: boolean;
   phoneSaved: boolean;
+  isEditMode: boolean;
+  currentSubmitIntent: ListingSubmissionIntent | null;
+  currentListingStatus: ListingStatusValue;
 }>;
