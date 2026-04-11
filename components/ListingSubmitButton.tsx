@@ -1,10 +1,7 @@
-type ListingSubmitButtonProps = Readonly<{
-  loading: boolean;
-  imagesOptimizing: boolean;
-  phoneSaved: boolean;
-}>;
+import type { ListingSubmitButtonProps } from "@/types/listing-form";
 
 export default function ListingSubmitButton({
+  mode,
   loading,
   imagesOptimizing,
   phoneSaved,
@@ -18,11 +15,15 @@ export default function ListingSubmitButton({
       }`}
     >
       {loading
-        ? "Creando..."
+        ? mode === "edit"
+          ? "Guardando..."
+          : "Creando..."
         : imagesOptimizing
         ? "Optimizando imágenes..."
         : !phoneSaved
         ? "Guarda tu teléfono para continuar"
+        : mode === "edit"
+        ? "Guardar cambios"
         : "Crear anuncio"}
     </button>
   );

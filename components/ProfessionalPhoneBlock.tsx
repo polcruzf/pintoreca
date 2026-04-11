@@ -1,13 +1,4 @@
-type ProfessionalPhoneBlockProps = Readonly<{
-  phoneMessage: string;
-  phoneSaved: boolean;
-  phone: string;
-  phoneLoading: boolean;
-  currentPhone?: string | null;
-  onPhoneChange: (value: string) => void;
-  onSavePhone: () => void;
-  onEditPhone: () => void;
-}>;
+import type { ProfessionalPhoneBlockProps } from "@/types/listing-form";
 
 export default function ProfessionalPhoneBlock({
   phoneMessage,

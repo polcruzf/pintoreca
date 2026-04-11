@@ -1,20 +1,6 @@
 import { SPAIN_PROVINCES } from "@/constants/spain-provinces";
-
-function sanitizePostalCode(value: string): string {
-  const digits = value.replace(/\D/g, "");
-  return digits.slice(0, 5);
-}
-
-type ListingLocationSectionProps = Readonly<{
-  city: string;
-  province: string;
-  postalCode: string;
-  serviceRadiusKm: string;
-  onCityChange: (value: string) => void;
-  onProvinceChange: (value: string) => void;
-  onPostalCodeChange: (value: string) => void;
-  onServiceRadiusKmChange: (value: string) => void;
-}>;
+import { sanitizePostalCode } from "@/lib/listing-form";
+import type { ListingLocationSectionProps } from "@/types/listing-form";
 
 export default function ListingLocationSection({
   city,

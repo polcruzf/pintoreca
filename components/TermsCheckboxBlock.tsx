@@ -1,7 +1,4 @@
-type TermsCheckboxBlockProps = Readonly<{
-  acceptTerms: boolean;
-  setAcceptTerms: (value: boolean) => void;
-}>;
+import type { TermsCheckboxBlockProps } from "@/types/listing-form";
 
 export default function TermsCheckboxBlock({
   acceptTerms,

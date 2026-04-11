@@ -1,6 +1,4 @@
-type ListingMessageBlockProps = Readonly<{
-  listingMessage: string;
-}>;
+import type { ListingMessageBlockProps } from "@/types/listing-form";
 
 export default function ListingMessageBlock({
   listingMessage,

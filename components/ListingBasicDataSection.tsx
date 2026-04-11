@@ -1,17 +1,4 @@
-type Specialty = {
-  id: string;
-  name: string;
-};
-
-type ListingBasicDataSectionProps = Readonly<{
-  displayName: string;
-  description: string;
-  selectedSpecialtyId: string;
-  specialties: Specialty[];
-  onDisplayNameChange: (value: string) => void;
-  onDescriptionChange: (value: string) => void;
-  onSelectedSpecialtyIdChange: (value: string) => void;
-}>;
+import type { ListingBasicDataSectionProps } from "@/types/listing-form";
 
 export default function ListingBasicDataSection({
   displayName,

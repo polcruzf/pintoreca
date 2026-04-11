@@ -1,18 +1,5 @@
-function isInvalidPrice(value: string): boolean {
-  if (value === "") return false;
-  return Number(value) <= 0;
-}
-
-type ListingServiceConditionsSectionProps = Readonly<{
-  pricePerM2: string;
-  availability: string;
-  budgetType: string;
-  yearsExperience: string;
-  onPricePerM2Change: (value: string) => void;
-  onAvailabilityChange: (value: string) => void;
-  onBudgetTypeChange: (value: string) => void;
-  onYearsExperienceChange: (value: string) => void;
-}>;
+import { isInvalidPrice } from "@/lib/listing-form";
+import type { ListingServiceConditionsSectionProps } from "@/types/listing-form";
 
 export default function ListingServiceConditionsSection({
   pricePerM2,
